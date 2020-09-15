@@ -24,15 +24,18 @@ class MuiltivwDataset(BaseDataSet):
 
     def _set_files(self):
         def data_len_filter(comm_name,frame_len_paris):
+            if len(frame_len_paris)<2:
+                return frame_len_paris[0]>10
             return min(*frame_len_paris)>10
         self.mvbdata = DoubleViewPairDataset(self.root.strip(),
 					    segmentation= True,
                                             transform_frames= None,
-					    number_views=2,
+					    number_views=1,
 					    filter_func=data_len_filter)
 
     def __len__(self):
-        return len(self.mvbdata)
+        # return len(self.mvbdata)
+        return 8*10
 
     def _load_data(self, index):
         s = self.mvbdata[index]
