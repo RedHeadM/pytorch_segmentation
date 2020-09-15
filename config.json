@@ -13,12 +13,12 @@
     },
 
     "train_loader": {
-        "type": "VOC",
+        "type": "MVB",
         "args":{
-            "data_dir": "data/VOCtrainval_11-May-2012",
+            "data_dir": "/tmp/tcn_data/texture_multibot_push_left9010_bot/videos/train",
             "batch_size": 8,
-            "base_size": 400,
-            "crop_size": 380,
+            "base_size": 128,
+            "crop_size": 128,
             "augment": true,
             "shuffle": true,
             "scale": true,
@@ -31,9 +31,9 @@
     },
 
     "val_loader": {
-        "type": "VOC",
+        "type": "MVB",
         "args":{
-            "data_dir": "data/VOCtrainval_11-May-2012",
+            "data_dir": "/tmp/tcn_data/texture_multibot_push_left9010_bot/videos/train",
             "batch_size": 8,
             "crop_size": 480,
             "val": true,

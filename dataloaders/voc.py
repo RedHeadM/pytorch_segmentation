@@ -1,4 +1,4 @@
-# Originally written by Kazuto Nakashima 
+# Originally written by Kazuto Nakashima
 # https://github.com/kazuto1011/deeplab-pytorch
 
 from base import BaseDataSet, BaseDataLoader
@@ -29,7 +29,7 @@ class VOCDataset(BaseDataSet):
 
         file_list = os.path.join(self.root, "ImageSets/Segmentation", self.split + ".txt")
         self.files = [line.rstrip() for line in tuple(open(file_list, "r"))]
-    
+
     def _load_data(self, index):
         image_id = self.files[index]
         image_path = os.path.join(self.image_dir, image_id + '.jpg')
@@ -56,7 +56,7 @@ class VOCAugDataset(BaseDataSet):
         file_list = os.path.join(self.root, "ImageSets/Segmentation", self.split + ".txt")
         file_list = [line.rstrip().split(' ') for line in tuple(open(file_list, "r"))]
         self.files, self.labels = list(zip(*file_list))
-    
+
     def _load_data(self, index):
         image_path = os.path.join(self.root, self.files[index][1:])
         label_path = os.path.join(self.root, self.labels[index][1:])
@@ -69,7 +69,7 @@ class VOCAugDataset(BaseDataSet):
 class VOC(BaseDataLoader):
     def __init__(self, data_dir, batch_size, split, crop_size=None, base_size=None, scale=True, num_workers=1, val=False,
                     shuffle=False, flip=False, rotate=False, blur= False, augment=False, val_split= None, return_id=False):
-        
+
         self.MEAN = [0.45734706, 0.43338275, 0.40058118]
         self.STD = [0.23965294, 0.23532275, 0.2398498]
 
@@ -88,7 +88,7 @@ class VOC(BaseDataLoader):
             'return_id': return_id,
             'val': val
         }
-    
+
         if split in ["train_aug", "trainval_aug", "val_aug", "test_aug"]:
             self.dataset = VOCAugDataset(**kwargs)
         elif split in ["train", "trainval", "val", "test"]:
