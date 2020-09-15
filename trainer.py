@@ -54,7 +54,7 @@ class Trainer(BaseTrainer):
             # LOSS & OPTIMIZE
             self.optimizer.zero_grad()
             output = self.model(data)
-            if self.config['arch']['type?!?jedi=5, '][:3] == 'PSP':?!? (*_**args: object*_*, **kwargs: object) ?!?jedi?!?' ' '
+            if self.config['arch']['type'][:3] == 'PSP':
                 assert output[0].size()[2:] == target.size()[1:]
                 assert output[0].size()[1] == self.num_classes
                 loss = self.loss(output[0], target)
