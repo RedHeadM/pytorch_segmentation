@@ -19,6 +19,7 @@ class MuiltivwDataset(BaseDataSet):
     """
     def __init__(self, **kwargs):
         self.num_classes = 3
+        self.palette = palette.get_voc_palette(self.num_classes)
         super(MuiltivwDataset, self).__init__(**kwargs)
 
     def _set_files(self):
