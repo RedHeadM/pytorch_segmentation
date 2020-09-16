@@ -15,7 +15,7 @@
     "train_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/tcn_data/texture_multibot_push_left9010_bot/videos/train",
+            "data_dir": "/media/markus/DATA/mutilview_tex/texture_multibot_push_left9010_bot/videos/train",
             "batch_size": 8,
             "base_size": 128,
             "crop_size": 128,
@@ -33,7 +33,7 @@
     "val_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/tcn_data/texture_multibot_push_left9010_bot/videos/train",
+            "data_dir": "/media/markus/DATA/mutilview_tex/texture_multibot_push_left9010_bot/videos/val",
             "batch_size": 8,
             "crop_size": 480,
             "val": true,
@@ -72,6 +72,6 @@
         "log_per_iter": 20,
 
         "val": true,
-        "val_per_epochs": 1
+        "val_per_epochs": 5
     }
 }

@@ -34,8 +34,7 @@ class MuiltivwDataset(BaseDataSet):
 					    filter_func=data_len_filter)
 
     def __len__(self):
-        # return len(self.mvbdata)
-        return 8*10
+        return len(self.mvbdata)
 
     def _load_data(self, index):
         s = self.mvbdata[index]
