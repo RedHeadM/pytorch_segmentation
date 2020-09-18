@@ -1,10 +1,10 @@
 {
-    "name": "PSPNet",
+    "name": "Deeplab",
     "n_gpu": 1,
     "use_synch_bn": true,
 
     "arch": {
-        "type": "PSPNet",
+        "type": "DeepLab",
         "args": {
             "backbone": "resnet50",
             "freeze_bn": false,
@@ -35,7 +35,8 @@
         "args":{
             "data_dir": "/media/markus/DATA/mutilview_tex/texture_multibot_push_left9010_bot/videos/val",
             "batch_size": 8,
-            "crop_size": 480,
+            "crop_size": 128,
+            "shuffle": true,
             "val": true,
             "split": "val",
             "num_workers": 4

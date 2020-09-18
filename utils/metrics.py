@@ -56,12 +56,20 @@ def batch_intersection_union(predict, target, num_class, labeled):
     assert (area_inter <= area_union).all(), "Intersection area should be smaller than Union area"
     return area_inter.cpu().numpy(), area_union.cpu().numpy()
 
-def eval_metrics(output, target, num_class):
+def eval_metrics(output, target, num_class, rm_class_lable = None):
+
     _, predict = torch.max(output.data, 1)
     predict = predict + 1
     target = target + 1
 
     labeled = (target > 0) * (target <= num_class)
+    if rm_class_lable is not None:
+        for c_rm in rm_class_lable:
+            idx_use = target != (c_rm+1)
+            # mask_out = torch.cat([idx_use.unsqueeze(dim=1) for c in range(output.shape[1])],dim=1)
+            # labeled[idx_use] = False
+            labeled*=idx_use
     correct, num_labeled = batch_pix_accuracy(predict, target, labeled)
     inter, union = batch_intersection_union(predict, target, num_class, labeled)
+
     return [np.round(correct, 5), np.round(num_labeled, 5), np.round(inter, 5), np.round(union, 5)]

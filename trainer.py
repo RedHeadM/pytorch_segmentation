@@ -47,6 +47,7 @@ class Trainer(BaseTrainer):
         self._reset_metrics()
         tbar = tqdm(self.train_loader, ncols=130)
         for batch_idx, (data, target) in enumerate(tbar):
+            self._valid_epoch(epoch) # DEBUG
             self.data_time.update(time.time() - tic)
             #data, target = data.to(self.device), target.to(self.device)
             self.lr_scheduler.step(epoch=epoch-1)
@@ -54,6 +55,7 @@ class Trainer(BaseTrainer):
             # LOSS & OPTIMIZE
             self.optimizer.zero_grad()
             output = self.model(data)
+            print('output[0].size(): {}'.format(output[0].size()))
             if self.config['arch']['type'][:3] == 'PSP':
                 assert output[0].size()[2:] == target.size()[1:]
                 assert output[0].size()[1] == self.num_classes
@@ -129,7 +131,9 @@ class Trainer(BaseTrainer):
                 self.total_loss.update(loss.item())
 
                 seg_metrics = eval_metrics(output, target, self.num_classes)
-                self._update_seg_metrics(*seg_metrics)
+                # rm backgroud form loss with lable zero
+                seg_metrics_no_bg = eval_metrics(output, target, self.num_classes, rm_class_lable=[0])
+                self._update_seg_metrics(*seg_metrics, *seg_metrics_no_bg)
 
                 # LIST OF IMAGE TO VIZ (15 images)
                 if len(val_visual) < 15:
@@ -142,6 +146,7 @@ class Trainer(BaseTrainer):
                 tbar.set_description('EVAL ({}) | Loss: {:.3f}, PixelAcc: {:.2f}, Mean IoU: {:.2f} |'.format( epoch,
                                                 self.total_loss.average,
                                                 pixAcc, mIoU))
+                break# DEBUG
 
             # WRTING & VISUALIZING THE MASKS
             val_img = []
@@ -159,7 +164,8 @@ class Trainer(BaseTrainer):
             # METRICS TO TENSORBOARD
             self.wrt_step = (epoch) * len(self.val_loader)
             self.writer.add_scalar(f'{self.wrt_mode}/loss', self.total_loss.average, self.wrt_step)
-            seg_metrics = self._get_seg_metrics()
+            seg_metrics = self._get_seg_metrics(no_bg=True)
+            print('seg_metrics: {}'.format(seg_metrics))
             for k, v in list(seg_metrics.items())[:-1]:
                 self.writer.add_scalar(f'{self.wrt_mode}/{k}', v, self.wrt_step)
 
@@ -177,18 +183,40 @@ class Trainer(BaseTrainer):
         self.total_inter, self.total_union = 0, 0
         self.total_correct, self.total_label = 0, 0
 
-    def _update_seg_metrics(self, correct, labeled, inter, union):
+        self.total_correct_no_bg = 0
+        self.total_inter_no_bg = 0
+        self.total_union_no_bg = 0
+        self.total_label_no_bg =0
+
+    def _update_seg_metrics(self, correct, labeled, inter, union, correct_no_bg=None,labeled_no_bg=None, inter_no_bg=None, union_no_bg=None):
         self.total_correct += correct
         self.total_label += labeled
         self.total_inter += inter
         self.total_union += union
 
-    def _get_seg_metrics(self):
+        if correct_no_bg is not None:
+            self.total_correct_no_bg +=correct_no_bg
+            self.total_label_no_bg += labeled_no_bg
+            self.total_inter_no_bg += inter_no_bg
+            self.total_union_no_bg += union_no_bg
+
+    def _get_seg_metrics(self, no_bg = False):
         pixAcc = 1.0 * self.total_correct / (np.spacing(1) + self.total_label)
         IoU = 1.0 * self.total_inter / (np.spacing(1) + self.total_union)
         mIoU = IoU.mean()
-        return {
+        ret =  {
             "Pixel_Accuracy": np.round(pixAcc, 3),
             "Mean_IoU": np.round(mIoU, 3),
             "Class_IoU": dict(zip(range(self.num_classes), np.round(IoU, 3)))
         }
+        if no_bg:
+            pixAcc_no_bg = 1.0 * self.total_correct_no_bg / (np.spacing(1) + self.total_label_no_bg)
+            IoU_no_bg = 1.0 * self.total_inter / (np.spacing(1) + self.total_union_no_bg)
+            mIoU_no_bg = IoU_no_bg.mean()
+            ret.update({
+                "Pixel_Accuracy_no_bg": np.round(pixAcc_no_bg, 3),
+                "Mean_IoU_no_bg": np.round(mIoU_no_bg, 3),
+                "Class_IoU_no_bg": dict(zip(range(self.num_classes), np.round(IoU_no_bg, 3)))
+            })
+
+        return ret
