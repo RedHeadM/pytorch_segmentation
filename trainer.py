@@ -167,7 +167,8 @@ class Trainer(BaseTrainer):
             seg_metrics = self._get_seg_metrics(no_bg=True)
             print('seg_metrics: {}'.format(seg_metrics))
             for k, v in list(seg_metrics.items())[:-1]:
-                self.writer.add_scalar(f'{self.wrt_mode}/{k}', v, self.wrt_step)
+                if not isinstance(v,dict ):
+                    self.writer.add_scalar(f'{self.wrt_mode}/{k}', v, self.wrt_step)
 
             log = {
                 'val_loss': self.total_loss.average,
