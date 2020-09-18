@@ -47,7 +47,7 @@ class Trainer(BaseTrainer):
         self._reset_metrics()
         tbar = tqdm(self.train_loader, ncols=130)
         for batch_idx, (data, target) in enumerate(tbar):
-            self._valid_epoch(epoch) # DEBUG
+            # self._valid_epoch(epoch) # DEBUG
             self.data_time.update(time.time() - tic)
             #data, target = data.to(self.device), target.to(self.device)
             self.lr_scheduler.step(epoch=epoch-1)
@@ -55,7 +55,6 @@ class Trainer(BaseTrainer):
             # LOSS & OPTIMIZE
             self.optimizer.zero_grad()
             output = self.model(data)
-            print('output[0].size(): {}'.format(output[0].size()))
             if self.config['arch']['type'][:3] == 'PSP':
                 assert output[0].size()[2:] == target.size()[1:]
                 assert output[0].size()[1] == self.num_classes
@@ -146,7 +145,6 @@ class Trainer(BaseTrainer):
                 tbar.set_description('EVAL ({}) | Loss: {:.3f}, PixelAcc: {:.2f}, Mean IoU: {:.2f} |'.format( epoch,
                                                 self.total_loss.average,
                                                 pixAcc, mIoU))
-                break# DEBUG
 
             # WRTING & VISUALIZING THE MASKS
             val_img = []
@@ -165,7 +163,6 @@ class Trainer(BaseTrainer):
             self.wrt_step = (epoch) * len(self.val_loader)
             self.writer.add_scalar(f'{self.wrt_mode}/loss', self.total_loss.average, self.wrt_step)
             seg_metrics = self._get_seg_metrics(no_bg=True)
-            print('seg_metrics: {}'.format(seg_metrics))
             for k, v in list(seg_metrics.items())[:-1]:
                 if not isinstance(v,dict ):
                     self.writer.add_scalar(f'{self.wrt_mode}/{k}', v, self.wrt_step)
