@@ -16,6 +16,8 @@
         "type": "MVB",
         "args":{
             "data_dir": "/media/markus/DATA/mutilview_tex/texture_multibot_push_left9010_bot/videos/train",
+            "view_idx": 0,
+            "number_views": 1,
             "batch_size": 8,
             "base_size": 128,
             "crop_size": 128,
@@ -36,6 +38,8 @@
             "data_dir": "/media/markus/DATA/mutilview_tex/texture_multibot_push_left9010_bot/videos/val",
             "batch_size": 8,
             "crop_size": 128,
+            "view_idx": 1,
+            "number_views": 2,
             "shuffle": true,
             "val": true,
             "split": "val",

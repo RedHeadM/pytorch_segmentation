@@ -17,10 +17,15 @@ class MuiltivwDataset(BaseDataSet):
     Pascal Voc dataset
     http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar
     """
-    def __init__(self, **kwargs):
+    def __init__(self, number_views, view_idx, **kwargs):
         self.num_classes = 3
         self.palette = palette.get_voc_palette(self.num_classes)
+        self.number_views = number_views
+        self.view_idx = view_idx
+
+        assert isinstance(view_idx, int) and isinstance(number_views, int)
         super(MuiltivwDataset, self).__init__(**kwargs)
+        print('data dir {}, view idx {}, num views'.format(self.root, view_idx, number_views))
 
     def _set_files(self):
         def data_len_filter(comm_name,frame_len_paris):
@@ -30,7 +35,7 @@ class MuiltivwDataset(BaseDataSet):
         self.mvbdata = DoubleViewPairDataset(self.root.strip(),
 					    segmentation= True,
                                             transform_frames= None,
-					    number_views=1,
+					    number_views=self.number_views,
 					    filter_func=data_len_filter)
 
     def __len__(self):
@@ -39,14 +44,14 @@ class MuiltivwDataset(BaseDataSet):
     def _load_data(self, index):
         s = self.mvbdata[index]
         label = s["seg"]
-        image =s["frames views " + str(0)]
+        image =s["frames views " + str(self.view_idx)]
         image = np.asarray(image, dtype=np.float32)
         label = np.asarray(label, dtype=np.int32)
         return image, label, s["id"]
 
 class MVB(BaseDataLoader):
     def __init__(self, data_dir, batch_size, split, crop_size=None, base_size=None, scale=True, num_workers=1, val=False,
-                    shuffle=False, flip=False, rotate=False, blur= False, augment=False, val_split= None, return_id=False):
+                    shuffle=False, flip=False, rotate=False, blur= False, augment=False, val_split= None, return_id=False,number_views=1, view_idx=0):
 
         self.MEAN = [0.45734706, 0.43338275, 0.40058118]
         self.STD = [0.23965294, 0.23532275, 0.2398498]
@@ -67,6 +72,6 @@ class MVB(BaseDataLoader):
             'val': val
         }
 
-        self.dataset = MuiltivwDataset(**kwargs)
+        self.dataset = MuiltivwDataset(number_views,view_idx,**kwargs)
         super(MVB, self).__init__(self.dataset, batch_size, shuffle, num_workers, val_split)
 
