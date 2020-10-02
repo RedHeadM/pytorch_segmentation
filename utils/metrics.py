@@ -68,7 +68,6 @@ def eval_metrics(output, target, num_class, rm_class_lable = None):
             idx_not_use = target == (c_rm+1)
             idx_n = torch.ones_like(idx_not_use)
             idx_n[idx_not_use] =0
-            # mask_out = torch.cat([idx_use.unsqueeze(dim=1) for c in range(output.shape[1])],dim=1)
             labeled*=idx_n
     correct, num_labeled = batch_pix_accuracy(predict, target, labeled)
     inter, union = batch_intersection_union(predict, target, num_class, labeled)
