@@ -131,7 +131,7 @@ class Trainer(BaseTrainer):
 
                 seg_metrics = eval_metrics(output, target, self.num_classes)
                 # rm backgroud form loss with lable zero
-                seg_metrics_no_bg = eval_metrics(output, target, self.num_classes, rm_class_lable=[0])
+                seg_metrics_no_bg = eval_metrics(output, target, self.num_classes, rm_class_lable=[2])
                 self._update_seg_metrics(*seg_metrics, *seg_metrics_no_bg)
 
                 # LIST OF IMAGE TO VIZ (15 images)

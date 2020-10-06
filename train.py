@@ -12,7 +12,7 @@ from utils.torchsummary import summary
 from trainer import Trainer
 
 def get_instance(module, name, config, *args):
-    # GET THE CORRESPONDING CLASS / FCT 
+    # GET THE CORRESPONDING CLASS / FCT
     return getattr(module, config[name]['type'])(*args, **config[name]['args'])
 
 def main(config, resume):
@@ -24,7 +24,7 @@ def main(config, resume):
 
     # MODEL
     model = get_instance(models, 'arch', config, train_loader.dataset.num_classes)
-    print(f'\n{model}\n')
+    # print(f'\n{model}\n')
 
     # LOSS
     loss = getattr(losses, config['loss'])(ignore_index = config['ignore_index'])
@@ -57,5 +57,5 @@ if __name__=='__main__':
         config = torch.load(args.resume)['config']
     if args.device:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.device
-    
+
     main(config, args.resume)

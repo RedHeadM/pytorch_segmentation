@@ -22,7 +22,13 @@ class MuiltivwDataset(BaseDataSet):
         self.palette = palette.get_voc_palette(self.num_classes)
         self.number_views = number_views
         self.view_idx = view_idx
-
+        print('view_idx: {}'.format(view_idx))
+        print('view_idx: {}'.format(view_idx))
+        print('view_idx: {}'.format(view_idx))
+        if not isinstance(view_idx,int):
+            raise ValueError('view_idx: {}'.format(view_idx))
+        self.view_key_img = "frames views " + str(self.view_idx)
+        self.view_key_seg = "seg "+str(self.view_index)
         assert isinstance(view_idx, int) and isinstance(number_views, int)
         super(MuiltivwDataset, self).__init__(**kwargs)
         print('data dir {}, view idx {}, num views'.format(self.root, view_idx, number_views))
@@ -43,19 +49,20 @@ class MuiltivwDataset(BaseDataSet):
 
     def _load_data(self, index):
         s = self.mvbdata[index]
-        label = s["seg"]
-        image =s["frames views " + str(self.view_idx)]
+        label = s[self.view_key_seg]
+        image = s[self.view_key_img]
         image = np.asarray(image, dtype=np.float32)
         label = np.asarray(label, dtype=np.int32)
         return image, label, s["id"]
 
 class MVB(BaseDataLoader):
     def __init__(self, data_dir, batch_size, split, crop_size=None, base_size=None, scale=True, num_workers=1, val=False,
-                    shuffle=False, flip=False, rotate=False, blur= False, augment=False, val_split= None, return_id=False,number_views=1, view_idx=0):
+                    shuffle=False, flip=False, rotate=False, blur= False, augment=False, val_split= None, return_id=False,
+                    number_views=1, view_idx=None):
 
         self.MEAN = [0.45734706, 0.43338275, 0.40058118]
         self.STD = [0.23965294, 0.23532275, 0.2398498]
-
+        assert view_idx is not None, "set view idx in config"
         kwargs = {
             'root': data_dir,
             'split': split,
