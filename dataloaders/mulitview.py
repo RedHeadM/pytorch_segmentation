@@ -22,13 +22,10 @@ class MuiltivwDataset(BaseDataSet):
         self.palette = palette.get_voc_palette(self.num_classes)
         self.number_views = number_views
         self.view_idx = view_idx
-        print('view_idx: {}'.format(view_idx))
-        print('view_idx: {}'.format(view_idx))
-        print('view_idx: {}'.format(view_idx))
         if not isinstance(view_idx,int):
             raise ValueError('view_idx: {}'.format(view_idx))
         self.view_key_img = "frames views " + str(self.view_idx)
-        self.view_key_seg = "seg "+str(self.view_index)
+        self.view_key_seg = "seg "+str(self.view_idx)
         assert isinstance(view_idx, int) and isinstance(number_views, int)
         super(MuiltivwDataset, self).__init__(**kwargs)
         print('data dir {}, view idx {}, num views'.format(self.root, view_idx, number_views))
