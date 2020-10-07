@@ -11,14 +11,16 @@ from PIL import Image
 import cv2
 from torch.utils.data import Dataset
 from torchvision import transforms
-from lightningvae.data import DoubleViewPairDataset
+
+from multiview.video.datasets import ViewPairDataset
 class MuiltivwDataset(BaseDataSet):
     """
     Pascal Voc dataset
     http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar
     """
     def __init__(self, number_views, view_idx, **kwargs):
-        self.num_classes = 3
+        # self.num_classes = 3
+        self.num_classes = 2+10
         self.palette = palette.get_voc_palette(self.num_classes)
         self.number_views = number_views
         self.view_idx = view_idx
@@ -35,7 +37,7 @@ class MuiltivwDataset(BaseDataSet):
             if len(frame_len_paris)<2:
                 return frame_len_paris[0]>10
             return min(*frame_len_paris)>10
-        self.mvbdata = DoubleViewPairDataset(self.root.strip(),
+        self.mvbdata = ViewPairDataset(self.root.strip(),
 					    segmentation= True,
                                             transform_frames= None,
 					    number_views=self.number_views,
