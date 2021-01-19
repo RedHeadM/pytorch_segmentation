@@ -8,6 +8,7 @@ from base import BaseTrainer, DataPrefetcher
 from utils.helpers import colorize_mask
 from utils.metrics import eval_metrics, AverageMeter
 from tqdm import tqdm
+from models.matching import Matching
 
 class Trainer(BaseTrainer):
     def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None, prefetch=True):
@@ -34,6 +35,49 @@ class Trainer(BaseTrainer):
 
         torch.backends.cudnn.benchmark = True
 
+
+        # supergure
+        config_match = {
+            'superpoint': {
+                'nms_radius': config['superpoint']['nms_radius'],
+                'keypoint_threshold': config['superpoint']['keypoint_threshold'],
+                'max_keypoints': config['superpoint']['max_keypoints']
+            },
+            'superglue': {
+                'weights': config['superglue']['weights'],
+                'sinkhorn_iterations': config['superglue']['sinkhorn_iterations'],
+                'match_threshold': config['superglue']['match_threshold'],
+            }
+        }
+        resize=config['superglue']['resize']
+        if len(resize) == 2 and resize[1] == -1:
+            resize = resize[0:1]
+        if len(resize) == 2:
+            print('Will resize to {}x{} (WxH)'.format(
+                resize[0], resize[1]))
+        elif len(resize) == 1 and resize[0] > 0:
+            print('Will resize max dimension to {}'.format(resize[0]))
+        elif len(resize) == 1:
+            print('Will not resize images')
+        else:
+            raise ValueError('Cannot specify more than two integers for --resize')
+
+        self.matching = Matching(config_match).eval().to(self.device)
+        self.keys = ['keypoints', 'scores', 'descriptors']
+
+
+    def _get_glue_mask(self,target,mkpt0, mkpt1,m_cnt, ignore_idx=255):
+        target_adapt = torch.full_like(target,ignore_idx)
+        for i in range(target.size(0)):
+        # for (x0, y0), (x1, y1) in zip(mkpts0, mkpts1):
+            # rm padding
+            m=mkpt1[i,:m_cnt[i]]
+            # m=torch.stack(mkpt1[i]).to(torch.long)
+            test=target_adapt[i,[2,3],[3,4]]
+            m[0] = torch.tensor([[4,4]])
+            target_adapt[i,m[:,0],m[:,1]]=target[i,m[:,0],m[:,1]]
+        return target_adapt
+
     def _train_epoch(self, epoch):
         self.logger.info('\n')
 
@@ -46,7 +90,7 @@ class Trainer(BaseTrainer):
         tic = time.time()
         self._reset_metrics()
         tbar = tqdm(self.train_loader, ncols=130)
-        for batch_idx, (data, target) in enumerate(tbar):
+        for batch_idx, (data, target, input_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
             # self._valid_epoch(epoch) # DEBUG
             self.data_time.update(time.time() - tic)
             #data, target = data.to(self.device), target.to(self.device)
@@ -66,6 +110,12 @@ class Trainer(BaseTrainer):
                 assert output.size()[1] == self.num_classes
                 loss = self.loss(output, target)
 
+            output_a = self.model(input_a)
+            target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1,m_cnt)
+            loss_sg = self.loss(output_a, target_a_gule)
+            print('loss_sg: {}'.format(loss_sg))
+            print('loss: {}'.format(loss))
+            loss+= loss_sg *0.9
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss = loss.mean()
             loss.backward()
@@ -120,7 +170,7 @@ class Trainer(BaseTrainer):
         tbar = tqdm(self.val_loader, ncols=130)
         with torch.no_grad():
             val_visual = []
-            for batch_idx, (data, target) in enumerate(tbar):
+            for batch_idx, (data, target,data_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
                 #data, target = data.to(self.device), target.to(self.device)
                 # LOSS
                 output = self.model(data)

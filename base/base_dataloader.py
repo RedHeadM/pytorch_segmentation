@@ -24,12 +24,12 @@ class BaseDataLoader(DataLoader):
     def _split_sampler(self, split):
         if split == 0.0:
             return None, None
-        
+
         self.shuffle = False
 
         split_indx = int(self.nbr_examples * split)
         np.random.seed(0)
-        
+
         indxs = np.arange(self.nbr_examples)
         np.random.shuffle(indxs)
         train_indxs = indxs[split_indx:]
@@ -53,7 +53,11 @@ class DataPrefetcher(object):
         self.stream = torch.cuda.Stream()
         self.stop_after = stop_after
         self.next_input = None
+        self.next_input_a = None
         self.next_target = None
+        self.mkpt0 = None
+        self.mkpt1 = None
+        self.m_cnt = None
         self.device = device
 
     def __len__(self):
@@ -61,14 +65,19 @@ class DataPrefetcher(object):
 
     def preload(self):
         try:
-            self.next_input, self.next_target = next(self.loaditer)
+            self.next_input, self.next_target,self.next_input_a,self.mkpt0,self.mkpt1,self.m_cnt = next(self.loaditer)
         except StopIteration:
             self.next_input = None
             self.next_target = None
+            self.m_cnt = None
+            self.mkpt0 = None
+            self.mkpt1 = None
+            self.next_input_a = None
             return
         with torch.cuda.stream(self.stream):
             self.next_input = self.next_input.cuda(device=self.device, non_blocking=True)
             self.next_target = self.next_target.cuda(device=self.device, non_blocking=True)
+            self.next_input_a = self.next_input_a.cuda(device=self.device, non_blocking=True)
 
     def __iter__(self):
         count = 0
@@ -77,9 +86,13 @@ class DataPrefetcher(object):
         while self.next_input is not None:
             torch.cuda.current_stream().wait_stream(self.stream)
             input = self.next_input
+            input_a = self.next_input_a
             target = self.next_target
+            mkpt0 = self.mkpt0
+            m_cnt=self.m_cnt
+            mkpt1 = self.mkpt1
             self.preload()
             count += 1
-            yield input, target
+            yield input, target,input_a, mkpt0, mkpt1,m_cnt
             if type(self.stop_after) is int and (count > self.stop_after):
                 break

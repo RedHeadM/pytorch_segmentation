@@ -33,7 +33,7 @@ class BaseDataSet(Dataset):
 
     def _set_files(self):
         raise NotImplementedError
-    
+
     def _load_data(self, index):
         raise NotImplementedError
 
@@ -62,7 +62,7 @@ class BaseDataSet(Dataset):
 
     def _augmentation(self, image, label):
         h, w, _ = image.shape
-        # Scaling, we set the bigger to base size, and the smaller 
+        # Scaling, we set the bigger to base size, and the smaller
         # one is rescaled to maintain the same ratio, if we don't have any obj in the image, re-do the processing
         if self.base_size:
             if self.scale:
@@ -72,7 +72,7 @@ class BaseDataSet(Dataset):
             h, w = (longside, int(1.0 * longside * w / h + 0.5)) if h > w else (int(1.0 * longside * h / w + 0.5), longside)
             image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
             label = cv2.resize(label, (w, h), interpolation=cv2.INTER_NEAREST)
-    
+
         h, w, _ = image.shape
         # Rotate the image with an angle between -10 and 10
         if self.rotate:
@@ -95,8 +95,8 @@ class BaseDataSet(Dataset):
             if pad_h > 0 or pad_w > 0:
                 image = cv2.copyMakeBorder(image, value=0, **pad_kwargs)
                 label = cv2.copyMakeBorder(label, value=0, **pad_kwargs)
-            
-            # Cropping 
+
+            # Cropping
             h, w, _ = image.shape
             start_h = random.randint(0, h - self.crop_size)
             start_w = random.randint(0, w - self.crop_size)
@@ -118,12 +118,12 @@ class BaseDataSet(Dataset):
             ksize = ksize + 1 if ksize % 2 == 0 else ksize
             image = cv2.GaussianBlur(image, (ksize, ksize), sigmaX=sigma, sigmaY=sigma, borderType=cv2.BORDER_REFLECT_101)
         return image, label
-        
+
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, index):
-        image, label, image_id = self._load_data(index)
+        image, label,imge_a, mkpt0,mkpt1,m_cnt = self._load_data(index)
         if self.val:
             image, label = self._val_augmentation(image, label)
         elif self.augment:
@@ -131,9 +131,11 @@ class BaseDataSet(Dataset):
 
         label = torch.from_numpy(np.array(label, dtype=np.int32)).long()
         image = Image.fromarray(np.uint8(image))
-        if self.return_id:
-            return  self.normalize(self.to_tensor(image)), label, image_id
-        return self.normalize(self.to_tensor(image)), label
+        imge_a = Image.fromarray(np.uint8(imge_a))
+        imge_a = self.normalize(self.to_tensor(imge_a))
+        mkpt0 = torch.from_numpy(np.array(mkpt0, dtype=np.int32)).long()
+        mkpt1 = torch.from_numpy(np.array(mkpt1, dtype=np.int32)).long()
+        return self.normalize(self.to_tensor(image)), label,imge_a, mkpt0, mkpt1, m_cnt
 
     def __repr__(self):
         fmt_str = "Dataset: " + self.__class__.__name__ + "\n"

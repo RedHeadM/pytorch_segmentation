@@ -78,5 +78,15 @@
 
         "val": true,
         "val_per_epochs": 5
+    },
+    "superglue": {
+        "nms_radius": 4,
+        "keypoint_threshold": 0.005,
+        "max_keypoints": -1,
+    },
+    "superglue": {
+        "weights": "outdoor",
+        "sinkhorn_iterations": 20,
+        "match_threshold": 0.2,
     }
 }
