@@ -1,6 +1,6 @@
 {
-    "name": "DeepLab_eval_3p_view_0_to_1_mulit_obj_res_256_base_size_300",
-    "n_gpu": 4,
+    "name": "DeepLab_data6_1_to_1",
+    "n_gpu": 1,
     "use_synch_bn": true,
 
     "arch": {
@@ -15,10 +15,10 @@
     "train_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/texture_multibot_push_left10030/videos/train",
-            "batch_size": 64,
-            "view_idx": 0,
-            "number_views": 1,
+            "data_dir": "/tmp/tcn_data/texture_multibot_push_left10060/videos/train",
+            "batch_size": 16,
+            "view_idx": 1,
+            "number_views": 2,
             "base_size": 300,
             "crop_size": 256,
             "augment": true,
@@ -28,16 +28,17 @@
             "rotate": true,
             "blur": false,
             "split": "train_aug",
-            "num_workers": 16
+            "num_workers": 4
         }
     },
 
     "val_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/texture_multibot_push_left10030/videos/val",
+            "data_dir": "/tmp/tcn_data/texture_multibot_push_left10060/videos/val",
             "batch_size": 8,
-            "crop_size": 300,
+            "base_size": 300,
+            "crop_size": 256,
             "view_idx": 1,
             "number_views": 2,
             "shuffle": true,
@@ -77,6 +78,6 @@
         "log_per_iter": 20,
 
         "val": true,
-        "val_per_epochs": 5
+    "val_per_epochs": 5
     }
 }

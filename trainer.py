@@ -47,6 +47,7 @@ class Trainer(BaseTrainer):
         self._reset_metrics()
         tbar = tqdm(self.train_loader, ncols=130)
         for batch_idx, (data, target) in enumerate(tbar):
+
             # self._valid_epoch(epoch) # DEBUG
             self.data_time.update(time.time() - tic)
             #data, target = data.to(self.device), target.to(self.device)
@@ -121,7 +122,7 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             val_visual = []
             for batch_idx, (data, target) in enumerate(tbar):
-                #data, target = data.to(self.device), target.to(self.device)
+                data, target = data.to(self.device), target.to(self.device)
                 # LOSS
                 output = self.model(data)
                 loss = self.loss(output, target)
