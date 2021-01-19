@@ -113,9 +113,7 @@ class Trainer(BaseTrainer):
             output_a = self.model(input_a)
             target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1,m_cnt)
             loss_sg = self.loss(output_a, target_a_gule)
-            print('loss_sg: {}'.format(loss_sg))
-            print('loss: {}'.format(loss))
-            loss+= loss_sg *0.9
+            loss+= loss_sg *0.6
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss = loss.mean()
             loss.backward()
