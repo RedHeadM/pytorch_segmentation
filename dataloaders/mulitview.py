@@ -55,8 +55,14 @@ class MuiltivwDataset(BaseDataSet):
     def _pad_match(self,mkpts0):
         mkpts0_padded=np.zeros((self.max_matching_len,2))
         mkpts0=np.array(mkpts0)
-        max_l = min(self.max_matching_len,mkpts0.shape[0])
-        mkpts0_padded[:max_l]=mkpts0
+        max_l = min(self.max_matching_len-1,mkpts0.shape[0])
+        try:
+            mkpts0_padded[:max_l] = mkpts0[:max_l]
+        except:
+            print('mkpts0.shape[0]: {}'.format(mkpts0.shape[0]))
+            print('max_l: {}'.format(max_l))
+
+
         return mkpts0_padded, mkpts0.shape[0]
 
     def _load_data(self, index):
