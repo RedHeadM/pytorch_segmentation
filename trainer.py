@@ -72,9 +72,6 @@ class Trainer(BaseTrainer):
         # for (x0, y0), (x1, y1) in zip(mkpts0, mkpts1):
             # rm padding
             m=mkpt1[i,:m_cnt[i]]
-            # m=torch.stack(mkpt1[i]).to(torch.long)
-            test=target_adapt[i,[2,3],[3,4]]
-            m[0] = torch.tensor([[4,4]])
             target_adapt[i,m[:,0],m[:,1]]=target[i,m[:,0],m[:,1]]
         return target_adapt
 
@@ -113,7 +110,7 @@ class Trainer(BaseTrainer):
             output_a = self.model(input_a)
             target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1,m_cnt)
             loss_sg = self.loss(output_a, target_a_gule)
-            loss+= loss_sg *0.6
+            loss+= loss_sg *0.9
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss = loss.mean()
             loss.backward()

@@ -1,6 +1,6 @@
 {
-    "name": "DeepLab_eval_3p_view_0_to_1_mulit_obj_res_256_base_size_300",
-    "n_gpu": 4,
+    "name": "Deeplab_supergule_0.9",
+    "n_gpu": 1,
     "use_synch_bn": true,
 
     "arch": {
@@ -15,12 +15,13 @@
     "train_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/texture_multibot_push_left10030/videos/train",
-            "batch_size": 64,
-            "view_idx": 0,
-            "number_views": 1,
+            "data_dir": "/tmp/tcn_data/videos/train",
+            "view_idx_adapt": 1,
+            "view_idx_labled": 0,
+            "number_views": 2,
+            "batch_size": 16,
             "base_size": 300,
-            "crop_size": 256,
+            "crop_size": 300,
             "augment": true,
             "shuffle": true,
             "scale": true,
@@ -28,17 +29,18 @@
             "rotate": true,
             "blur": false,
             "split": "train_aug",
-            "num_workers": 16
+            "num_workers": 8
         }
     },
 
     "val_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/texture_multibot_push_left10030/videos/val",
-            "batch_size": 8,
+            "data_dir": "/tmp/tcn_data/videos/val_same_bot",
+            "batch_size": 32,
             "crop_size": 300,
-            "view_idx": 1,
+            "view_idx_labled": 1,
+            "view_idx_adapt": 0,
             "number_views": 2,
             "shuffle": true,
             "val": true,
@@ -57,6 +59,17 @@
         }
     },
 
+    "superpoint": {
+        "nms_radius": 4,
+        "keypoint_threshold": 0.005,
+        "max_keypoints": 100
+    },
+    "superglue": {
+        "resize" : [300,300],
+        "weights": "outdoor",
+        "sinkhorn_iterations": 20,
+        "match_threshold": 0.2
+    },
     "loss": "CrossEntropyLoss2d",
     "ignore_index": 255,
     "lr_scheduler": {
@@ -73,20 +86,11 @@
         "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved/runs",
+        "log_dir": "saved_superglue/runs",
         "log_per_iter": 20,
 
         "val": true,
         "val_per_epochs": 5
-    },
-    "superglue": {
-        "nms_radius": 4,
-        "keypoint_threshold": 0.005,
-        "max_keypoints": -1,
-    },
-    "superglue": {
-        "weights": "outdoor",
-        "sinkhorn_iterations": 20,
-        "match_threshold": 0.2,
     }
 }
+
