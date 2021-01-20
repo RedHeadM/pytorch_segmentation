@@ -82,12 +82,16 @@ class MuiltivwDataset(BaseDataSet):
         i, j = frame_idx,frame_idx
         key_match = 'view{}:frame{}->view{}:frame{}'.format(view_i,i,view_j,j)
         match_file = os.path.join(self.match_dir, cm+".txt")
-        with open(match_file) as f:
-            data_match = json.load(f)[key_match]
-        # matches
-        mkpts0, m_cnt = self._pad_match(data_match['mkpts0'])
-        mkpts1,m_cnt1 = self._pad_match(data_match['mkpts1'])
-        assert m_cnt==m_cnt1
+        try:
+            with open(match_file) as f:
+                data_match = json.load(f)[key_match]
+
+            # matches
+            mkpts0, m_cnt = self._pad_match(data_match['mkpts0'])
+            mkpts1,m_cnt1 = self._pad_match(data_match['mkpts1'])
+            assert m_cnt==m_cnt1
+        except:
+            mkpts0,mkpts1,m_cnt= 0,0,0
         return image, label,image_adapt, mkpts0,mkpts1,m_cnt
 
 class MVB(BaseDataLoader):
