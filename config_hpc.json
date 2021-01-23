@@ -1,5 +1,5 @@
 {
-    "name": "Deeplab_supergule_0.0",
+    "name": "Deeplab_supergule_d2_1to2_0.002",
     "n_gpu": 1,
     "use_synch_bn": true,
 
@@ -15,10 +15,10 @@
     "train_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/tcn_data/videos/train",
-            "view_idx_adapt": 1,
-            "view_idx_labled": 0,
-            "number_views": 2,
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10060/videos/train_adaptation",
+            "view_idx_adapt": 2,
+            "view_idx_labled": 1,
+            "number_views": 3,
             "batch_size": 16,
             "base_size": 300,
             "crop_size": 300,
@@ -36,12 +36,12 @@
     "val_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/tcn_data/videos/val_same_bot",
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10060/videos/val",
             "batch_size": 32,
             "crop_size": 300,
-            "view_idx_labled": 1,
-            "view_idx_adapt": 0,
-            "number_views": 2,
+            "view_idx_labled": 2,
+            "view_idx_adapt": 1,
+            "number_views": 3,
             "shuffle": true,
             "val": true,
             "split": "val",
@@ -90,7 +90,7 @@
         "log_per_iter": 20,
 
         "val": true,
-        "val_per_epochs": 5
+        "val_per_epochs": 2
     }
 }
 

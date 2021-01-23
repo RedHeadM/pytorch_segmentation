@@ -88,7 +88,7 @@ class Trainer(BaseTrainer):
         self._reset_metrics()
         tbar = tqdm(self.train_loader, ncols=130)
         for batch_idx, (data, target, input_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
-            self._valid_epoch(epoch) # DEBUG
+            # self._valid_epoch(epoch) # DEBUG
             self.data_time.update(time.time() - tic)
             #data, target = data.to(self.device), target.to(self.device)
             self.lr_scheduler.step(epoch=epoch-1)
@@ -107,10 +107,10 @@ class Trainer(BaseTrainer):
                 assert output.size()[1] == self.num_classes
                 loss = self.loss(output, target)
 
-            # output_a = self.model(input_a)
-            # target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1,m_cnt)
-            # loss_sg = self.loss(output_a, target_a_gule)
-            # loss+= loss_sg *0.1
+            output_a = self.model(input_a)
+            target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1,m_cnt)
+            loss_sg = self.loss(output_a, target_a_gule)
+            loss+= loss_sg *0.002
 
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss = loss.mean()
@@ -166,7 +166,7 @@ class Trainer(BaseTrainer):
         tbar = tqdm(self.val_loader, ncols=130)
         with torch.no_grad():
             val_visual = []
-            for batch_idx, (data, target,data_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
+            for batch_idx, (data, target, data_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
                 #data, target = data.to(self.device), target.to(self.device)
                 # LOSS
                 output = self.model(data)

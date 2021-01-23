@@ -77,6 +77,7 @@ class MuiltivwDataset(BaseDataSet):
 
         cm=s["common name"]
         frame_idx=s["frame index"]
+        # get superglue match for json
         view_i= min(self.view_idx_labled,self.view_idx_adapt)
         view_j= max(self.view_idx_labled,self.view_idx_adapt)
         i, j = frame_idx,frame_idx
