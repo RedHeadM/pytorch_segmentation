@@ -74,16 +74,13 @@ class Trainer(BaseTrainer):
     def _get_glue_mask(self,target,mkpt0, mkpt1,m_cnt, ignore_idx=255, p_lable=None):
         if p_lable is not None:
             target_adapt = p_lable
-            print('p_lable: {}'.format(p_lable.shape))
-            print('target: {}'.format(target.shape))
         else:
             target_adapt = torch.full_like(target,ignore_idx)
         for i in range(target.size(0)):
         # for (x0, y0), (x1, y1) in zip(mkpts0, mkpts1):
             # rm padding
             if m_cnt[i]==0:
-                print('i: {}'.format(i))
-                print('m_cnt: {}'.format(m_cnt))
+                print('no superpoints found m_cnt: {}'.format(m_cnt))
                 continue
             m=mkpt1[i,:m_cnt[i]]
             # x y flip

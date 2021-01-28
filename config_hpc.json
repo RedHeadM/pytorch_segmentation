@@ -1,5 +1,5 @@
 {
-    "name": "Deeplab_supergule_data7_noXYflip_1to2_plable_relax_test",
+    "name": "Deeplab_supergule_data7_noXYflip_1to2_plable_relax",
     "n_gpu": 1,
     "use_synch_bn": true,
 
