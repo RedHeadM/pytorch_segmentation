@@ -9,6 +9,7 @@ from utils.helpers import colorize_mask
 from utils.metrics import eval_metrics, AverageMeter
 from tqdm import tqdm
 from models.matching import Matching
+from utils.transformnvidia import ImgWtLossSoftNLL, RelaxedBoundaryLossToTensor
 
 class Trainer(BaseTrainer):
     def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None, prefetch=True):
@@ -37,41 +38,55 @@ class Trainer(BaseTrainer):
 
 
         # supergure
-        config_match = {
-            'superpoint': {
-                'nms_radius': config['superpoint']['nms_radius'],
-                'keypoint_threshold': config['superpoint']['keypoint_threshold'],
-                'max_keypoints': config['superpoint']['max_keypoints']
-            },
-            'superglue': {
-                'weights': config['superglue']['weights'],
-                'sinkhorn_iterations': config['superglue']['sinkhorn_iterations'],
-                'match_threshold': config['superglue']['match_threshold'],
-            }
-        }
-        resize=config['superglue']['resize']
-        if len(resize) == 2 and resize[1] == -1:
-            resize = resize[0:1]
-        if len(resize) == 2:
-            print('Will resize to {}x{} (WxH)'.format(
-                resize[0], resize[1]))
-        elif len(resize) == 1 and resize[0] > 0:
-            print('Will resize max dimension to {}'.format(resize[0]))
-        elif len(resize) == 1:
-            print('Will not resize images')
+        # config_match = {
+            # 'superpoint': {
+                # 'nms_radius': config['superpoint']['nms_radius'],
+                # 'keypoint_threshold': config['superpoint']['keypoint_threshold'],
+                # 'max_keypoints': config['superpoint']['max_keypoints']
+            # },
+            # 'superglue': {
+                # 'weights': config['superglue']['weights'],
+                # 'sinkhorn_iterations': config['superglue']['sinkhorn_iterations'],
+                # 'match_threshold': config['superglue']['match_threshold'],
+            # }
+        # }
+        # resize=config['superglue']['resize']
+        # if len(resize) == 2 and resize[1] == -1:
+            # resize = resize[0:1]
+        # if len(resize) == 2:
+            # print('Will resize to {}x{} (WxH)'.format(
+                # resize[0], resize[1]))
+        # elif len(resize) == 1 and resize[0] > 0:
+            # print('Will resize max dimension to {}'.format(resize[0]))
+        # elif len(resize) == 1:
+            # print('Will not resize images')
+        # else:
+            # raise ValueError('Cannot specify more than two integers for --resize')
+
+        # self.matching = Matching(config_match).eval().to(self.device)
+        # self.keys = ['keypoints', 'scores', 'descriptors']
+
+        self.label_relax=True
+        if self.label_relax:
+            wt_bound = 1.0
+            self.label_relax_loss = ImgWtLossSoftNLL(classes=self.num_classes, ignore_index=255, upper_bound=wt_bound)
+
+    def _get_glue_mask(self,target,mkpt0, mkpt1,m_cnt, ignore_idx=255, p_lable=None):
+        if p_lable is not None:
+            target_adapt = p_lable
+            print('p_lable: {}'.format(p_lable.shape))
+            print('target: {}'.format(target.shape))
         else:
-            raise ValueError('Cannot specify more than two integers for --resize')
-
-        self.matching = Matching(config_match).eval().to(self.device)
-        self.keys = ['keypoints', 'scores', 'descriptors']
-
-
-    def _get_glue_mask(self,target,mkpt0, mkpt1,m_cnt, ignore_idx=255):
-        target_adapt = torch.full_like(target,ignore_idx)
+            target_adapt = torch.full_like(target,ignore_idx)
         for i in range(target.size(0)):
         # for (x0, y0), (x1, y1) in zip(mkpts0, mkpts1):
             # rm padding
+            if m_cnt[i]==0:
+                print('i: {}'.format(i))
+                print('m_cnt: {}'.format(m_cnt))
+                continue
             m=mkpt1[i,:m_cnt[i]]
+            # x y flip
             target_adapt[i,m[:,0],m[:,1]]=target[i,m[:,0],m[:,1]]
         return target_adapt
 
@@ -106,11 +121,30 @@ class Trainer(BaseTrainer):
                 assert output.size()[2:] == target.size()[1:], "output {}, target {}".format(output.shape,target.shape)
                 assert output.size()[1] == self.num_classes
                 loss = self.loss(output, target)
+            if epoch >1:
+                print('epoch: {}'.format(epoch))
+                output_a = self.model(input_a)
+                p_lable = torch.softmax(output_a.detach(),dim=1)
+                max_probs, p_target = torch.max(p_lable,dim=1)
+                target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1, m_cnt, 255,p_target)
 
-            output_a = self.model(input_a)
-            target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1,m_cnt)
-            loss_sg = self.loss(output_a, target_a_gule)
-            loss+= loss_sg *0.002
+                if self.label_relax:
+                    # pixelWiseWeight = torch.ones(max_probs.shape).cuda()
+                    # print('target_a_gule: {}'.format(target_a_gule.shape))
+                    # target_a_gule = self.relax_labels(target_a_gule.cpu())
+                    # target_a_gule = target_a_gule.reshape(1,target_a_gule.shape[0],target_a_gule.shape[1],target_a_gule.shape[2]).cuda()
+                    # loss_sg = self.label_relax_loss(output_a[0].unsqueeze(0),target_a_gule)
+
+                    target_a_gule=target_a_gule.detach().cpu()
+                    relax_l=[]
+                    for i in range(target_a_gule.size(0)):
+                        lr = self.relax_labels(target_a_gule[i])
+                        relax_l.append(lr.unsqueeze(0))
+                    relax_l=torch.cat(relax_l,dim=0).cuda()
+                    loss_sg = self.label_relax_loss(output_a,relax_l)
+                else:
+                    loss_sg = self.loss(output_a, target_a_gule)
+                loss+= loss_sg *0.1
 
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss = loss.mean()
@@ -152,6 +186,13 @@ class Trainer(BaseTrainer):
 
         #if self.lr_scheduler is not None: self.lr_scheduler.step()
         return log
+
+    def relax_labels(self,lbl):
+        ignore_label=255
+        rlbl_tensor = RelaxedBoundaryLossToTensor(ignore_label,self.num_classes)
+        lbl_relaxed = rlbl_tensor(lbl)
+        lbl_relaxed = torch.from_numpy(lbl_relaxed).byte()
+        return lbl_relaxed
 
     def _valid_epoch(self, epoch):
         if self.val_loader is None:
