@@ -66,7 +66,7 @@ class Trainer(BaseTrainer):
         # self.matching = Matching(config_match).eval().to(self.device)
         # self.keys = ['keypoints', 'scores', 'descriptors']
 
-        self.label_relax=True
+        self.label_relax=False
         if self.label_relax:
             wt_bound = 1.0
             self.label_relax_loss = ImgWtLossSoftNLL(classes=self.num_classes, ignore_index=255, upper_bound=wt_bound)
@@ -118,30 +118,30 @@ class Trainer(BaseTrainer):
                 assert output.size()[2:] == target.size()[1:], "output {}, target {}".format(output.shape,target.shape)
                 assert output.size()[1] == self.num_classes
                 loss = self.loss(output, target)
-            if epoch >1:
-                print('epoch: {}'.format(epoch))
-                output_a = self.model(input_a)
-                p_lable = torch.softmax(output_a.detach(),dim=1)
-                max_probs, p_target = torch.max(p_lable,dim=1)
-                target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1, m_cnt, 255,p_target)
+            # if epoch >1:
+            output_a = self.model(input_a)
+            p_lable = torch.softmax(output_a.detach(),dim=1)
+            max_probs, p_target = torch.max(p_lable,dim=1)
+            target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1, m_cnt, 255,p_target)
 
-                if self.label_relax:
-                    # pixelWiseWeight = torch.ones(max_probs.shape).cuda()
-                    # print('target_a_gule: {}'.format(target_a_gule.shape))
-                    # target_a_gule = self.relax_labels(target_a_gule.cpu())
-                    # target_a_gule = target_a_gule.reshape(1,target_a_gule.shape[0],target_a_gule.shape[1],target_a_gule.shape[2]).cuda()
-                    # loss_sg = self.label_relax_loss(output_a[0].unsqueeze(0),target_a_gule)
+            if self.label_relax:
+                # pixelWiseWeight = torch.ones(max_probs.shape).cuda()
+                # print('target_a_gule: {}'.format(target_a_gule.shape))
+                # target_a_gule = self.relax_labels(target_a_gule.cpu())
+                # target_a_gule = target_a_gule.reshape(1,target_a_gule.shape[0],target_a_gule.shape[1],target_a_gule.shape[2]).cuda()
+                # loss_sg = self.label_relax_loss(output_a[0].unsqueeze(0),target_a_gule)
 
-                    target_a_gule=target_a_gule.detach().cpu()
-                    relax_l=[]
-                    for i in range(target_a_gule.size(0)):
-                        lr = self.relax_labels(target_a_gule[i])
-                        relax_l.append(lr.unsqueeze(0))
-                    relax_l=torch.cat(relax_l,dim=0).cuda()
-                    loss_sg = self.label_relax_loss(output_a,relax_l)
-                else:
-                    loss_sg = self.loss(output_a, target_a_gule)
-                loss+= loss_sg *0.1
+                target_a_gule=target_a_gule.detach().cpu()
+                relax_l=[]
+                for i in range(target_a_gule.size(0)):
+                    lr = self.relax_labels(target_a_gule[i])
+                    relax_l.append(lr.unsqueeze(0))
+                relax_l=torch.cat(relax_l,dim=0).cuda()
+                loss_sg = self.label_relax_loss(output_a,relax_l)
+            else:
+                loss_sg = self.loss(output_a, target_a_gule)
+            loss+= loss_sg *0.5
+            # loss+= loss_sg *0.1
 
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss = loss.mean()
