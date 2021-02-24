@@ -17,13 +17,14 @@
         "args":{
             "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/train_adaptation",
             "view_idx_adapt": 2,
-            "view_idx_labled": 1,
-            "number_views": 3,
-            "batch_size": 16,
+            "view_idx_labled": 4,
+            "examples_per_seq": 1,
+            "number_views": 5,
+            "batch_size": 8,
             "base_size": 300,
             "crop_size": 300,
             "augment": true,
-            "shuffle": true,
+            "shuffle": false,
             "scale": true,
             "flip": true,
             "rotate": true,
@@ -39,10 +40,11 @@
             "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/val",
             "batch_size": 32,
             "crop_size": 300,
-            "view_idx_labled": 2,
+            "examples_per_seq": 0,
+            "view_idx_labled": 1,
             "view_idx_adapt": 1,
-            "number_views": 3,
-            "shuffle": true,
+            "number_views": 2,
+            "shuffle": false,
             "val": true,
             "split": "val",
             "num_workers": 4
@@ -78,19 +80,19 @@
     },
 
     "trainer": {
-        "epochs": 80,
-        "save_dir": "saved/",
-        "save_period": 10,
+        "epochs": 10000,
+        "save_dir": "saved_test_const/",
+        "save_period": 1000,
   
         "monitor": "max Mean_IoU",
         "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved_superglue/runs",
-        "log_per_iter": 20,
+        "log_dir": "saved_test_const/runs",
+        "log_per_iter": 1000,
 
         "val": true,
-        "val_per_epochs": 2
+        "val_per_epochs": 500
     }
 }
 

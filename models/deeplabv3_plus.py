@@ -354,10 +354,11 @@ class ConstHead(nn.Module):
                 nn.BatchNorm2d(4),
                 nn.ReLU(inplace=True),
                 nn.Flatten(),
-                nn.Linear(1024, 512),# TODO
+                # nn.Linear(1024, 512),# TODO img size 256
+                nn.Linear(1444, 512),# TODO img size 256
                 # # # nn.Linear(6400, 512),
-                nn.GELU(),
-                # nn.ReLU(),
+                # nn.GELU(),
+                nn.ReLU(),
                 # nn.Dropout(0.1),
                 nn.Linear(512,nz),
         )

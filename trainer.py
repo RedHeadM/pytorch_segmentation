@@ -194,13 +194,12 @@ class Trainer(BaseTrainer):
             labels_full = torch.from_numpy(np.concatenate([label_positive_pair, label_positive_pair])).to(self.device)
             # loss_metric = self.metric_criterion(emb,labels)[0]
             # loss_metric = self.metric_criterion(emb[:n],emb[n:],labels)
-            loss_metric = multi_vid_batch_loss(self.metric_criterion, emb, labels_full, num_vid_example=self.examples_per_seq)
-            print('loss_sg: {}'.format(loss))
-            print('loss_metric: {}'.format(loss_metric))
-            loss+= loss_metric
+            loss_metric = multi_vid_batch_loss(self.metric_criterion, emb, labels_full, num_vid_example=self.examples_per_seq)[0]
 
             if isinstance(self.loss, torch.nn.DataParallel):
+                loss_metric = loss_metric.mean()
                 loss = loss.mean()
+            loss+= loss_metric*0.02
             loss.backward()
             self.optimizer.step()
             self.total_loss.update(loss.item())
@@ -213,6 +212,7 @@ class Trainer(BaseTrainer):
             if batch_idx % self.log_step == 0:
                 self.wrt_step = (epoch - 1) * len(self.train_loader) + batch_idx
                 self.writer.add_scalar(f'{self.wrt_mode}/loss', loss.item(), self.wrt_step)
+                self.writer.add_scalar(f'{self.wrt_mode}/loss_metric', loss_metric.item(), self.wrt_step)
 
             # FOR EVAL
             seg_metrics = eval_metrics(output, target, self.num_classes)
@@ -223,8 +223,9 @@ class Trainer(BaseTrainer):
             # save_image(torch.cat((data,input_a)),"saved/img{}-{}.png".format(epoch,batch_idx))
 
             # PRINT INFO
-            tbar.set_description('TRAIN ({}) | Loss: {:.3f} | Acc {:.2f} mIoU {:.2f} | B {:.2f} D {:.2f} |'.format(
-                                                epoch, self.total_loss.average,
+            tbar.set_description('TRAIN ({}) | Loss: {:.3f} | m {:.3f} | Acc {:.2f} mIoU {:.2f} | B {:.2f} D {:.2f} |'.format(
+                                                epoch,
+                                                self.total_loss.average,loss_metric.detach().cpu().numpy(),
                                                 pixAcc, mIoU,
                                                 self.batch_time.average, self.data_time.average))
 
