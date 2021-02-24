@@ -50,27 +50,12 @@
             "num_workers": 4
         }
     },
-
     "optimizer": {
-        "type": "SGD",
-        "differential_lr": true,
+        "type": "Adam",
+        "differential_lr": false,
         "args":{
-            "lr": 0.01,
-            "weight_decay": 1e-4,
-            "momentum": 0.9
+            "lr": 0.01
         }
-    },
-
-    "superpoint": {
-        "nms_radius": 4,
-        "keypoint_threshold": 0.005,
-        "max_keypoints": 100
-    },
-    "superglue": {
-        "resize" : [300,300],
-        "weights": "outdoor",
-        "sinkhorn_iterations": 20,
-        "match_threshold": 0.2
     },
     "loss": "CrossEntropyLoss2d",
     "ignore_index": 255,
@@ -85,11 +70,11 @@
         "save_period": 1000,
   
         "monitor": "max Mean_IoU",
-        "early_stop": 10,
+        "early_stop": 100,
         
         "tensorboard": true,
         "log_dir": "saved_test_const/runs",
-        "log_per_iter": 1000,
+        "log_per_iter": 100,
 
         "val": true,
         "val_per_epochs": 500

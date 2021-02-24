@@ -199,7 +199,7 @@ class Trainer(BaseTrainer):
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss_metric = loss_metric.mean()
                 loss = loss.mean()
-            loss+= loss_metric*0.02
+            loss+= loss_metric*0.1
             loss.backward()
             self.optimizer.step()
             self.total_loss.update(loss.item())
@@ -219,7 +219,6 @@ class Trainer(BaseTrainer):
             self._update_seg_metrics(*seg_metrics)
             pixAcc, mIoU, _ = self._get_seg_metrics().values()
 
-            pixAcc, mIoU=0,0
             # save_image(torch.cat((data,input_a)),"saved/img{}-{}.png".format(epoch,batch_idx))
 
             # PRINT INFO
