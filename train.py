@@ -24,6 +24,13 @@ def main(config, resume):
 
     # MODEL
     model = get_instance(models, 'arch', config, train_loader.dataset.num_classes)
+
+    if config['arch']['student'] is True:
+        config = dict(config)
+        # config['arch']['args']['backbone'] ='resnet18'
+        model_student = get_instance(models, 'arch', config, train_loader.dataset.num_classes)
+    else:
+        model_student = False
     # print(f'\n{model}\n')
 
     # LOSS
@@ -37,7 +44,8 @@ def main(config, resume):
         config=config,
         train_loader=train_loader,
         val_loader=val_loader,
-        train_logger=train_logger)
+        train_logger=train_logger,
+        model_staudet=model_student)
 
     trainer.train()
 

@@ -11,12 +11,13 @@ import utils.lr_scheduler
 from utils.sync_batchnorm import convert_model
 from utils.sync_batchnorm import DataParallelWithCallback
 
+from itertools import chain
 def get_instance(module, name, config, *args):
-    # GET THE CORRESPONDING CLASS / FCT 
+    # GET THE CORRESPONDING CLASS / FCT
     return getattr(module, config[name]['type'])(*args, **config[name]['args'])
 
 class BaseTrainer:
-    def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None):
+    def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None,model_staudet=None):
         self.model = model
         self.loss = loss
         self.config = config
@@ -36,7 +37,10 @@ class BaseTrainer:
         else:
             self.model = torch.nn.DataParallel(self.model, device_ids=availble_gpus)
         self.model.to(self.device)
-
+        self.model_staudet=model_staudet
+        if model_staudet:
+            self.model_staudet = torch.nn.DataParallel(self.model_staudet, device_ids=availble_gpus)
+            self.model_staudet.to(self.device)
         # CONFIGS
         cfg_trainer = self.config['trainer']
         self.epochs = cfg_trainer['epochs']
@@ -44,15 +48,28 @@ class BaseTrainer:
 
         # OPTIMIZER
         if self.config['optimizer']['differential_lr']:
+            # trainable_params = [{'params': filter(lambda p:p.requires_grad, chain(self.model.get_decoder_params(),self.model_staudet.get_decoder_params()))},
+                                # {'params': filter(lambda p:p.requires_grad, chain(self.model_staudet.get_backbone_params(), self.model.get_backbone_params())),
+                                # 'lr': config['optimizer']['args']['lr'] / 10}]
+        # else:
             if isinstance(self.model, torch.nn.DataParallel):
+                # here module
                 trainable_params = [{'params': filter(lambda p:p.requires_grad, self.model.module.get_decoder_params())},
-                                    {'params': filter(lambda p:p.requires_grad, self.model.module.get_backbone_params()), 
+                                    {'params': filter(lambda p:p.requires_grad, self.model.module.get_backbone_params()),
                                     'lr': config['optimizer']['args']['lr'] / 10}]
             else:
                 trainable_params = [{'params': filter(lambda p:p.requires_grad, self.model.get_decoder_params())},
-                                    {'params': filter(lambda p:p.requires_grad, self.model.get_backbone_params()), 
+                                    {'params': filter(lambda p:p.requires_grad, self.model.get_backbone_params()),
                                     'lr': config['optimizer']['args']['lr'] / 10}]
+            if self.model_staudet:
+                if isinstance(self.model, torch.nn.DataParallel):
+                    trainable_params.append({'params': filter(lambda p:p.requires_grad, self.model_staudet.module.get_decoder_params())})
+                    trainable_params.append({'params': filter(lambda p:p.requires_grad, self.model_staudet.module.get_backbone_params())})
+                else:
+                    trainable_params.append({'params': filter(lambda p:p.requires_grad, self.model_staudet.get_decoder_params())},
+                                        {'params': filter(lambda p:p.requires_grad, self.model_staudet.get_backbone_params())})
         else:
+            assert not self.model_staudet, "student not done here"
             trainable_params = filter(lambda p:p.requires_grad, self.model.parameters())
         self.optimizer = get_instance(torch.optim, 'optimizer', config, trainable_params)
         self.lr_scheduler = getattr(utils.lr_scheduler, config['lr_scheduler']['type'])(self.optimizer, self.epochs, len(train_loader))
@@ -89,12 +106,12 @@ class BaseTrainer:
         elif n_gpu > sys_gpu:
             self.logger.warning(f'Nbr of GPU requested is {n_gpu} but only {sys_gpu} are available')
             n_gpu = sys_gpu
-            
+
         device = torch.device('cuda:0' if n_gpu > 0 else 'cpu')
         self.logger.info(f'Detected GPUs: {sys_gpu} Requested: {n_gpu}')
         available_gpus = list(range(n_gpu))
         return device, available_gpus
-    
+
     def train(self):
         for epoch in range(self.start_epoch, self.epochs+1):
             # RUN TRAIN (AND VAL)
@@ -106,7 +123,7 @@ class BaseTrainer:
                 self.logger.info(f'\n         ## Info for epoch {epoch} ## ')
                 for k, v in results.items():
                     self.logger.info(f'         {str(k):15s}: {v}')
-            
+
             if self.train_logger is not None:
                 log = {'epoch' : epoch, **results}
                 self.train_logger.add_entry(log)
@@ -119,7 +136,7 @@ class BaseTrainer:
                 except KeyError:
                     self.logger.warning(f'The metrics being tracked ({self.mnt_metric}) has not been calculated. Training stops.')
                     break
-                    
+
                 if self.improved:
                     self.mnt_best = log[self.mnt_metric]
                     self.not_improved_count = 0
@@ -145,7 +162,7 @@ class BaseTrainer:
             'config': self.config
         }
         filename = os.path.join(self.checkpoint_dir, f'checkpoint-epoch{epoch}.pth')
-        self.logger.info(f'\nSaving a checkpoint: {filename} ...') 
+        self.logger.info(f'\nSaving a checkpoint: {filename} ...')
         torch.save(state, filename)
 
         if save_best:
@@ -184,4 +201,4 @@ class BaseTrainer:
     def _eval_metrics(self, output, target):
         raise NotImplementedError
 
-    
+

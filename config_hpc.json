@@ -1,12 +1,13 @@
 {
-    "name": "Deeplab_supergule_data7_noXYflip_1to2_sg_0.5",
+    "name": "Deeplab_train_base_data7_1to1_same_bot",
     "n_gpu": 1,
-    "use_synch_bn": true,
+    "use_synch_bn": true,a#     
 
     "arch": {
         "type": "DeepLab",
+        "student": false,
         "args": {
-            "backbone": "resnet50",
+            "backbone": "resnet101",
             "freeze_bn": false,
             "freeze_backbone": false
         }
@@ -16,9 +17,9 @@
         "type": "MVB",
         "args":{
             "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/train_adaptation",
-            "view_idx_adapt": 2,
+            "view_idx_adapt": 1,
             "view_idx_labled": 1,
-            "number_views": 3,
+            "number_views": 5,
             "batch_size": 16,
             "base_size": 300,
             "crop_size": 300,
@@ -39,9 +40,9 @@
             "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/val",
             "batch_size": 32,
             "crop_size": 300,
-            "view_idx_labled": 2,
+            "view_idx_labled": 1,
             "view_idx_adapt": 1,
-            "number_views": 3,
+            "number_views": 5,
             "shuffle": true,
             "val": true,
             "split": "val",
@@ -79,14 +80,14 @@
 
     "trainer": {
         "epochs": 80,
-        "save_dir": "saved/",
+        "save_dir": "saved_steps/",
         "save_period": 10,
   
         "monitor": "max Mean_IoU",
         "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved_superglue/runs",
+        "log_dir": "saved_steps/runs",
         "log_per_iter": 20,
 
         "val": true,

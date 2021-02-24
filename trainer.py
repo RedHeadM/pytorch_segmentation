@@ -12,8 +12,8 @@ from models.matching import Matching
 from utils.transformnvidia import ImgWtLossSoftNLL, RelaxedBoundaryLossToTensor
 
 class Trainer(BaseTrainer):
-    def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None, prefetch=True):
-        super(Trainer, self).__init__(model, loss, resume, config, train_loader, val_loader, train_logger)
+    def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None, prefetch=True, model_staudet=None):
+        super(Trainer, self).__init__(model, loss, resume, config, train_loader, val_loader, train_logger,model_staudet=model_staudet)
 
         self.wrt_mode, self.wrt_step = 'train_', 0
         self.log_step = config['trainer'].get('log_per_iter', int(np.sqrt(self.train_loader.batch_size)))
@@ -36,42 +36,12 @@ class Trainer(BaseTrainer):
 
         torch.backends.cudnn.benchmark = True
 
-
-        # supergure
-        # config_match = {
-            # 'superpoint': {
-                # 'nms_radius': config['superpoint']['nms_radius'],
-                # 'keypoint_threshold': config['superpoint']['keypoint_threshold'],
-                # 'max_keypoints': config['superpoint']['max_keypoints']
-            # },
-            # 'superglue': {
-                # 'weights': config['superglue']['weights'],
-                # 'sinkhorn_iterations': config['superglue']['sinkhorn_iterations'],
-                # 'match_threshold': config['superglue']['match_threshold'],
-            # }
-        # }
-        # resize=config['superglue']['resize']
-        # if len(resize) == 2 and resize[1] == -1:
-            # resize = resize[0:1]
-        # if len(resize) == 2:
-            # print('Will resize to {}x{} (WxH)'.format(
-                # resize[0], resize[1]))
-        # elif len(resize) == 1 and resize[0] > 0:
-            # print('Will resize max dimension to {}'.format(resize[0]))
-        # elif len(resize) == 1:
-            # print('Will not resize images')
-        # else:
-            # raise ValueError('Cannot specify more than two integers for --resize')
-
-        # self.matching = Matching(config_match).eval().to(self.device)
-        # self.keys = ['keypoints', 'scores', 'descriptors']
-
         self.label_relax=False
         if self.label_relax:
             wt_bound = 1.0
             self.label_relax_loss = ImgWtLossSoftNLL(classes=self.num_classes, ignore_index=255, upper_bound=wt_bound)
 
-    def _get_glue_mask(self,target,mkpt0, mkpt1,m_cnt, ignore_idx=255, p_lable=None):
+    def _get_glue_mask(self,target, mkpt0, mkpt1,m_cnt, ignore_idx=255, p_lable=None):
         if p_lable is not None:
             target_adapt = p_lable
         else:
@@ -84,13 +54,15 @@ class Trainer(BaseTrainer):
                 continue
             m=mkpt1[i,:m_cnt[i]]
             # x y flip
-            target_adapt[i,m[:,0],m[:,1]]=target[i,m[:,0],m[:,1]]
+            target_adapt[i,m[:,1],m[:,0]] = target[i,m[:,0],m[:,1]]
         return target_adapt
 
     def _train_epoch(self, epoch):
         self.logger.info('\n')
 
         self.model.train()
+        if self.model_staudet:
+            self.model_staudet.train()
         if self.config['arch']['args']['freeze_bn']:
             if isinstance(self.model, torch.nn.DataParallel): self.model.module.freeze_bn()
             else: self.model.freeze_bn()
@@ -102,7 +74,8 @@ class Trainer(BaseTrainer):
         for batch_idx, (data, target, input_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
             # self._valid_epoch(epoch) # DEBUG
             self.data_time.update(time.time() - tic)
-            #data, target = data.to(self.device), target.to(self.device)
+            # data, target = data.to(self.device), target.to(self.device)
+            # target = target.to(self.device)
             self.lr_scheduler.step(epoch=epoch-1)
 
             # LOSS & OPTIMIZE
@@ -119,29 +92,25 @@ class Trainer(BaseTrainer):
                 assert output.size()[1] == self.num_classes
                 loss = self.loss(output, target)
             # if epoch >1:
-            output_a = self.model(input_a)
-            p_lable = torch.softmax(output_a.detach(),dim=1)
-            max_probs, p_target = torch.max(p_lable,dim=1)
-            target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1, m_cnt, 255,p_target)
+                # output_a = self.model(input_a)
+                # p_lable = torch.softmax(output_a.detach(),dim=1)
+                # max_probs, p_target = torch.max(p_lable,dim=1)
+                # target_a_gule= self._get_glue_mask(target, mkpt0, mkpt1, m_cnt, 255, p_target)
 
-            if self.label_relax:
-                # pixelWiseWeight = torch.ones(max_probs.shape).cuda()
-                # print('target_a_gule: {}'.format(target_a_gule.shape))
-                # target_a_gule = self.relax_labels(target_a_gule.cpu())
-                # target_a_gule = target_a_gule.reshape(1,target_a_gule.shape[0],target_a_gule.shape[1],target_a_gule.shape[2]).cuda()
-                # loss_sg = self.label_relax_loss(output_a[0].unsqueeze(0),target_a_gule)
-
-                target_a_gule=target_a_gule.detach().cpu()
-                relax_l=[]
-                for i in range(target_a_gule.size(0)):
-                    lr = self.relax_labels(target_a_gule[i])
-                    relax_l.append(lr.unsqueeze(0))
-                relax_l=torch.cat(relax_l,dim=0).cuda()
-                loss_sg = self.label_relax_loss(output_a,relax_l)
-            else:
-                loss_sg = self.loss(output_a, target_a_gule)
-            loss+= loss_sg *0.5
-            # loss+= loss_sg *0.1
+                # if self.label_relax:
+                    # # toto super slow
+                    # target_a_gule=target_a_gule.detach().cpu()
+                    # relax_l=[]
+                    # for i in range(target_a_gule.size(0)):
+                        # lr = self.relax_labels(target_a_gule[i])
+                        # relax_l.append(lr.unsqueeze(0))
+                    # relax_l=torch.cat(relax_l,dim=0).cuda()
+                    # loss_sg = self.label_relax_loss(output_a,relax_l)
+                # elif self.model_staudet:
+                    # loss_sg = self.loss(self.model_staudet(input_a), target_a_gule)
+                # else:
+                    # loss_sg = self.loss(output_a, target_a_gule)
+                # loss+= loss_sg *0.1
 
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss = loss.mean()
@@ -198,6 +167,8 @@ class Trainer(BaseTrainer):
         self.logger.info('\n###### EVALUATION ######')
 
         self.model.eval()
+        if self.model_staudet:
+            self.model_staudet.eval()
         self.wrt_mode = 'val'
 
         self._reset_metrics()
@@ -207,7 +178,10 @@ class Trainer(BaseTrainer):
             for batch_idx, (data, target, data_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
                 #data, target = data.to(self.device), target.to(self.device)
                 # LOSS
-                output = self.model(data)
+                if self.model_staudet:
+                    output = self.model_staudet(data)
+                else:
+                    output = self.model(data)
                 loss = self.loss(output, target)
                 if isinstance(self.loss, torch.nn.DataParallel):
                     loss = loss.mean()

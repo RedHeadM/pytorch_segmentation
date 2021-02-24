@@ -37,6 +37,7 @@ class MuiltivwDataset(BaseDataSet):
         super(MuiltivwDataset, self).__init__(**kwargs)
         print('data dir {}, view adapt {}, num views'.format(self.root, view_idx_adapt, number_views))
         self.match_dir=os.path.join(self.root,'../../superglue')
+        # self.match_dir=os.path.join(self.root,'../../superglue_train')
 
     def _set_files(self):
         def data_len_filter(comm_name,frame_len_paris):
