@@ -1,7 +1,7 @@
 {
-    "name": "Deeplab_train_base_data7_1to1_same_bot",
+    "name": "Deeplab_train_base_data8_1to4_same_bot",
     "n_gpu": 1,
-    "use_synch_bn": true,a#     
+    "use_synch_bn": true,     
 
     "arch": {
         "type": "DeepLab",
@@ -16,8 +16,8 @@
     "train_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/train_adaptation",
-            "view_idx_adapt": 1,
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/train_adaptation",
+            "view_idx_adapt": 4,
             "view_idx_labled": 1,
             "number_views": 5,
             "batch_size": 16,
@@ -37,10 +37,10 @@
     "val_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/val",
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/val",
             "batch_size": 32,
             "crop_size": 300,
-            "view_idx_labled": 1,
+            "view_idx_labled": 4,
             "view_idx_adapt": 1,
             "number_views": 5,
             "shuffle": true,
