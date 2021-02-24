@@ -19,11 +19,12 @@
             "view_idx_adapt": 1,
             "view_idx_labled": 0,
             "number_views": 2,
-            "batch_size": 2,
-            "base_size": 300,
-            "crop_size": 300,
+            "batch_size": 4,
+            "examples_per_seq": 1,
+            "base_size": 256,
+            "crop_size": 256,
             "augment": true,
-            "shuffle": true,
+            "shuffle": false,
             "scale": true,
             "flip": true,
             "rotate": true,
@@ -37,8 +38,9 @@
         "type": "MVB",
         "args":{
             "data_dir": "/media/markus/DATA/mutil_tex_3p/texture_multibot_push_left10050_bot/videos/val",
-            "batch_size": 1,
-            "crop_size": 300,
+            "batch_size": 32,
+            "crop_size": 256,
+            "examples_per_seq": 0,
             "view_idx_labled": 1,
             "view_idx_adapt": 0,
             "number_views": 2,
@@ -50,12 +52,10 @@
     },
 
     "optimizer": {
-        "type": "SGD",
-        "differential_lr": true,
+        "type": "Adam",
+        "differential_lr": false,
         "args":{
-            "lr": 0.01,
-            "weight_decay": 1e-4,
-            "momentum": 0.9
+            "lr": 0.0001
         }
     },
 
@@ -78,18 +78,18 @@
     },
 
     "trainer": {
-        "epochs": 80,
+        "epochs": 10000,
         "save_dir": "saved/",
-        "save_period": 10,
+        "save_period": 1000,
   
         "monitor": "max Mean_IoU",
         "early_stop": 10,
         
         "tensorboard": true,
         "log_dir": "saved/runs",
-        "log_per_iter": 20,
+        "log_per_iter": 200,
 
         "val": true,
-        "val_per_epochs": 1
+        "val_per_epochs": 1000
     }
 }

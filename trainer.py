@@ -10,6 +10,120 @@ from utils.metrics import eval_metrics, AverageMeter
 from tqdm import tqdm
 from models.matching import Matching
 from utils.transformnvidia import ImgWtLossSoftNLL, RelaxedBoundaryLossToTensor
+from torchvision.utils import save_image
+
+import torch.nn as nn
+import torch.nn.functional as F
+
+def sliding_window(sequence, winSize, step=1, stride=1, drop_last=False):
+    """Returns a generator that will iterate through
+    the defined chunks of input sequence. Input sequence
+    must be sliceable.
+    usage:
+        a =np.arange(16)
+        for i in sliding_window(a,8,step=1):
+            print(i)
+    """
+
+    # Verify the inputs
+    if not ((type(winSize) == type(0)) and (type(step) == type(0))):  # noqa: E721
+        print("(type(winSize) == type(0))", (type(winSize) == type(0)))  # noqa: E721
+        raise Exception("type(winSize) and type(step) must be int.")
+    if step > winSize:
+        raise Exception("step must not be larger than winSize.")
+    if winSize * stride > len(sequence):
+        raise Exception(
+            "winSize*stride ={}*{} must not be larger than sequence length={}.".format(winSize, stride, len(sequence))
+        )
+
+    n = len(sequence)
+    for i in range(0, n, step):
+        last = min(i + winSize * stride, n)
+        ret = sequence[i:last:stride]
+        if not drop_last or len(ret) == winSize:
+            yield ret
+        if len(ret) != winSize:
+            return
+
+
+def multi_vid_batch_loss(criterion_metric, batch, targets, num_vid_example,npair=True):
+    """ multiple view-pair in batch, metric loss for multi example for frame , only 2 view support"""
+    batch_size = batch.size(0)
+    emb_view0, emb_view1 = batch[: batch_size // 2], batch[batch_size // 2 :]
+    t_view0, t_view1 = targets[: batch_size // 2], targets[batch_size // 2 :]
+    batch_example_vid = emb_view0.size(0) // num_vid_example
+    slid_vid = lambda x: sliding_window(x, winSize=batch_example_vid, step=batch_example_vid)
+    loss = torch.zeros(1).cuda()
+    # compute loss for each video
+    for emb_view0_vid, emb_view1_vid, t0, t1 in zip(
+        slid_vid(emb_view0), slid_vid(emb_view1), slid_vid(t_view0), slid_vid(t_view1)
+    ):
+        if npair:
+            loss += criterion_metric(emb_view0_vid, emb_view1_vid, t0)
+        else:
+            loss += criterion_metric(torch.cat((emb_view0_vid, emb_view1_vid)), torch.cat((t0, t1)))
+    return loss
+
+def _pdist(A, squared=False, eps=1e-4):
+    prod = torch.mm(A, A.t())
+    norm = prod.diag().unsqueeze(1).expand_as(prod)
+    res = (norm + norm.t() - 2 * prod).clamp(min=0)
+    return res if squared else res.clamp(min=eps).sqrt()
+
+
+class LiftedStruct(nn.Module):
+    """Lifted Structured Feature Embedding
+    https://arxiv.org/abs/1511.06452
+    based on: https://github.com/vadimkantorov/metriclearningbench
+    see also: https://gist.github.com/bkj/565c5e145786cfd362cffdbd8c089cf4
+    """
+
+    def forward(self, embeddings, labels, margin=1.0, eps=1e-4):
+        loss = torch.zeros(1)
+        if torch.cuda.is_available():
+            loss = loss.cuda()
+        # L_{ij} = \log (\sum_{i, k} exp\{m - D_{ik}\} + \sum_{j, l} exp\{m - D_{jl}\}) + D_{ij}
+        # L = \frac{1}{2|P|}\sum_{(i,j)\in P} \max(0, J_{i,j})^2
+        d = _pdist(embeddings, squared=False, eps=eps)
+        # pos mat  1 where labels are same for distance mat
+        pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d)
+
+        neg_i = torch.mul((margin - d).exp(), 1 - pos).sum(1).expand_as(d)
+        loss += torch.sum(F.relu(pos.triu(1) * ((neg_i + neg_i.t()).log() + d)).pow(2)) / (pos.sum() - len(d))
+        return loss
+
+def cross_entropy(logits, target, size_average=True):
+    if size_average:
+        return torch.mean(torch.sum(- target * F.log_softmax(logits, -1), -1))
+    else:
+        return torch.sum(torch.sum(- target * F.log_softmax(logits, -1), -1))
+
+
+class NpairLoss(nn.Module):
+    """the multi-class n-pair loss
+        from: https://github.com/ChaofWang/Npair_loss_pytorch/blob/master/Npair_loss.py
+    """
+
+    def __init__(self, l2_reg=0.02):
+        super(NpairLoss, self).__init__()
+        self.l2_reg = l2_reg
+
+    def forward(self, anchor, positive, target):
+        '''
+            target are class labels
+        '''
+        batch_size = anchor.size(0)
+        target = target.view(target.size(0), 1)
+
+        target = (target == torch.transpose(target, 0, 1)).float()
+        target = target / torch.sum(target, dim=1, keepdim=True).float()
+
+        logit = torch.matmul(anchor, torch.transpose(positive, 0, 1))
+        loss_ce = cross_entropy(logit, target)
+        l2_loss = torch.sum(anchor**2) / batch_size + torch.sum(positive**2) / batch_size
+
+        loss = loss_ce + self.l2_reg*l2_loss*0.25
+        return loss
 
 class Trainer(BaseTrainer):
     def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None, prefetch=True):
@@ -35,57 +149,10 @@ class Trainer(BaseTrainer):
             self.val_loader = DataPrefetcher(val_loader, device=self.device)
 
         torch.backends.cudnn.benchmark = True
+        self.examples_per_seq = config['train_loader']['args']['examples_per_seq']
+        # self.metric_criterion = LiftedStruct()
+        self.metric_criterion = NpairLoss()
 
-
-        # supergure
-        # config_match = {
-            # 'superpoint': {
-                # 'nms_radius': config['superpoint']['nms_radius'],
-                # 'keypoint_threshold': config['superpoint']['keypoint_threshold'],
-                # 'max_keypoints': config['superpoint']['max_keypoints']
-            # },
-            # 'superglue': {
-                # 'weights': config['superglue']['weights'],
-                # 'sinkhorn_iterations': config['superglue']['sinkhorn_iterations'],
-                # 'match_threshold': config['superglue']['match_threshold'],
-            # }
-        # }
-        # resize=config['superglue']['resize']
-        # if len(resize) == 2 and resize[1] == -1:
-            # resize = resize[0:1]
-        # if len(resize) == 2:
-            # print('Will resize to {}x{} (WxH)'.format(
-                # resize[0], resize[1]))
-        # elif len(resize) == 1 and resize[0] > 0:
-            # print('Will resize max dimension to {}'.format(resize[0]))
-        # elif len(resize) == 1:
-            # print('Will not resize images')
-        # else:
-            # raise ValueError('Cannot specify more than two integers for --resize')
-
-        # self.matching = Matching(config_match).eval().to(self.device)
-        # self.keys = ['keypoints', 'scores', 'descriptors']
-
-        self.label_relax=False
-        if self.label_relax:
-            wt_bound = 1.0
-            self.label_relax_loss = ImgWtLossSoftNLL(classes=self.num_classes, ignore_index=255, upper_bound=wt_bound)
-
-    def _get_glue_mask(self,target,mkpt0, mkpt1,m_cnt, ignore_idx=255, p_lable=None):
-        if p_lable is not None:
-            target_adapt = p_lable
-        else:
-            target_adapt = torch.full_like(target,ignore_idx)
-        for i in range(target.size(0)):
-        # for (x0, y0), (x1, y1) in zip(mkpts0, mkpts1):
-            # rm padding
-            if m_cnt[i]==0:
-                print('no superpoints found m_cnt: {}'.format(m_cnt))
-                continue
-            m=mkpt1[i,:m_cnt[i]]
-            # x y flip
-            target_adapt[i,m[:,0],m[:,1]]=target[i,m[:,0],m[:,1]]
-        return target_adapt
 
     def _train_epoch(self, epoch):
         self.logger.info('\n')
@@ -118,30 +185,19 @@ class Trainer(BaseTrainer):
                 assert output.size()[2:] == target.size()[1:], "output {}, target {}".format(output.shape,target.shape)
                 assert output.size()[1] == self.num_classes
                 loss = self.loss(output, target)
-            # if epoch >1:
-            output_a = self.model(input_a)
-            p_lable = torch.softmax(output_a.detach(),dim=1)
-            max_probs, p_target = torch.max(p_lable,dim=1)
-            target_a_gule= self._get_glue_mask(target,mkpt0, mkpt1, m_cnt, 255,p_target)
+            emb = self.model(torch.cat((data,input_a)),True)
 
-            if self.label_relax:
-                # pixelWiseWeight = torch.ones(max_probs.shape).cuda()
-                # print('target_a_gule: {}'.format(target_a_gule.shape))
-                # target_a_gule = self.relax_labels(target_a_gule.cpu())
-                # target_a_gule = target_a_gule.reshape(1,target_a_gule.shape[0],target_a_gule.shape[1],target_a_gule.shape[2]).cuda()
-                # loss_sg = self.label_relax_loss(output_a[0].unsqueeze(0),target_a_gule)
-
-                target_a_gule=target_a_gule.detach().cpu()
-                relax_l=[]
-                for i in range(target_a_gule.size(0)):
-                    lr = self.relax_labels(target_a_gule[i])
-                    relax_l.append(lr.unsqueeze(0))
-                relax_l=torch.cat(relax_l,dim=0).cuda()
-                loss_sg = self.label_relax_loss(output_a,relax_l)
-            else:
-                loss_sg = self.loss(output_a, target_a_gule)
-            loss+= loss_sg *0.5
-            # loss+= loss_sg *0.1
+            # loss_sg = self.loss(output_a, target_a_gule)
+            n = data.size(0)
+            label_positive_pair = np.arange(n)
+            # labels = torch.from_numpy(label_positive_pair).to(self.device)
+            labels_full = torch.from_numpy(np.concatenate([label_positive_pair, label_positive_pair])).to(self.device)
+            # loss_metric = self.metric_criterion(emb,labels)[0]
+            # loss_metric = self.metric_criterion(emb[:n],emb[n:],labels)
+            loss_metric = multi_vid_batch_loss(self.metric_criterion, emb, labels_full, num_vid_example=self.examples_per_seq)
+            print('loss_sg: {}'.format(loss))
+            print('loss_metric: {}'.format(loss_metric))
+            loss+= loss_metric
 
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss = loss.mean()
@@ -162,6 +218,9 @@ class Trainer(BaseTrainer):
             seg_metrics = eval_metrics(output, target, self.num_classes)
             self._update_seg_metrics(*seg_metrics)
             pixAcc, mIoU, _ = self._get_seg_metrics().values()
+
+            pixAcc, mIoU=0,0
+            # save_image(torch.cat((data,input_a)),"saved/img{}-{}.png".format(epoch,batch_idx))
 
             # PRINT INFO
             tbar.set_description('TRAIN ({}) | Loss: {:.3f} | Acc {:.2f} mIoU {:.2f} | B {:.2f} D {:.2f} |'.format(

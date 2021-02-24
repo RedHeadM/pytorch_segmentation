@@ -14,6 +14,8 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 from multiview.video.datasets import ViewPairDataset
+from multiview.video.sampler import ViewPairSequenceSampler
+
 class MuiltivwDataset(BaseDataSet):
     """
     Pascal Voc dataset
@@ -35,8 +37,8 @@ class MuiltivwDataset(BaseDataSet):
         # self.view_key_seg = "seg "+str(self.view_idx_adapt)
         assert isinstance(view_idx_adapt, int) and isinstance(number_views, int)
         super(MuiltivwDataset, self).__init__(**kwargs)
-        print('data dir {}, view adapt {}, num views'.format(self.root, view_idx_adapt, number_views))
-        self.match_dir=os.path.join(self.root,'../../superglue')
+        # print('data dir {}, view adapt {}, num views'.format(self.root, view_idx_adapt, number_views))
+        # self.match_dir=os.path.join(self.root,'../../superglue')
 
     def _set_files(self):
         def data_len_filter(comm_name,frame_len_paris):
@@ -78,27 +80,13 @@ class MuiltivwDataset(BaseDataSet):
         cm=s["common name"]
         frame_idx=s["frame index"]
         # get superglue match for json
-        view_i= min(self.view_idx_labled,self.view_idx_adapt)
-        view_j= max(self.view_idx_labled,self.view_idx_adapt)
-        i, j = frame_idx,frame_idx
-        key_match = 'view{}:frame{}->view{}:frame{}'.format(view_i,i,view_j,j)
-        match_file = os.path.join(self.match_dir, cm+".txt")
-        try:
-            with open(match_file) as f:
-                data_match = json.load(f)[key_match]
-
-            # matches
-            mkpts0, m_cnt = self._pad_match(data_match['mkpts0'])
-            mkpts1,m_cnt1 = self._pad_match(data_match['mkpts1'])
-            assert m_cnt==m_cnt1
-        except:
-            mkpts0,mkpts1,m_cnt= 0,0,0
+        mkpts0,mkpts1,m_cnt= 0,0,0
         return image, label,image_adapt, mkpts0,mkpts1,m_cnt
 
 class MVB(BaseDataLoader):
     def __init__(self, data_dir, batch_size, split, crop_size=None, base_size=None, scale=True, num_workers=1, val=False,
                     shuffle=False, flip=False, rotate=False, blur= False, augment=False, val_split= None, return_id=False,
-                    number_views=1, view_idx_labled=None, view_idx_adapt=None):
+                    number_views=1, view_idx_labled=None, view_idx_adapt=None,examples_per_seq=0):
 
         self.MEAN = [0.45734706, 0.43338275, 0.40058118]
         self.STD = [0.23965294, 0.23532275, 0.2398498]
@@ -118,7 +106,11 @@ class MVB(BaseDataLoader):
             'return_id': return_id,
             'val': val
         }
-
         self.dataset = MuiltivwDataset(number_views,view_idx_labled,view_idx_adapt,**kwargs)
-        super(MVB, self).__init__(self.dataset, batch_size, shuffle, num_workers, val_split)
+        sampler = None
+        if examples_per_seq >0:
+            sampler = ViewPairSequenceSampler(self.dataset.mvbdata,
+                    batch_size//examples_per_seq,
+                    batch_size)
+        super(MVB, self).__init__(self.dataset, batch_size, shuffle, num_workers, val_split,sampler=sampler)
 

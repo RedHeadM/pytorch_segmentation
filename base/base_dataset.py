@@ -128,6 +128,7 @@ class BaseDataSet(Dataset):
             image, label = self._val_augmentation(image, label)
         elif self.augment:
             image, label = self._augmentation(image, label)
+            imge_a, _ = self._augmentation(image, label)
 
         label = torch.from_numpy(np.array(label, dtype=np.int32)).long()
         image = Image.fromarray(np.uint8(image))
