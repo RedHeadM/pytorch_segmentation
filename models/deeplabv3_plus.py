@@ -7,6 +7,9 @@ from torchvision import models
 import torch.utils.model_zoo as model_zoo
 from utils.helpers import initialize_weights
 from itertools import chain
+from torch.nn.parameter import Parameter
+import numpy as np
+from torch.autograd import Function, Variable
 
 '''
 -> ResNet BackBone
@@ -334,6 +337,60 @@ class Decoder(nn.Module):
 
 
 
+class SpatialSoftmax(nn.Module):
+    '''
+        This is a form of spatial attention over the activations.
+        See more here: http://arxiv.org/abs/1509.06113
+        based on:
+        https://gist.github.com/jeasinema/1cba9b40451236ba2cfb507687e08834
+
+        feature.shape height, width,
+    '''
+
+    def __init__(self, height, width, channel, temperature=None, data_format='NCHW'):
+        super().__init__()
+        self.data_format = data_format
+        self.height = height
+        self.width = width
+        self.channel = channel
+        # if for temperture
+        if temperature:
+            self.temperature = torch.ones(1)*temperature
+        else:
+            self.temperature = Parameter(torch.ones(1))
+        # if temperature:
+            # self.temperature = Parameter(torch.ones(1) * temperature)
+        # else:
+            # self.temperature = 1.
+
+        pos_x, pos_y = np.meshgrid(np.linspace(-1., 1., self.height),
+                                   np.linspace(-1., 1., self.width))
+        pos_x = torch.from_numpy(pos_x.reshape(
+            self.height * self.width)).float()
+        pos_y = torch.from_numpy(pos_y.reshape(
+            self.height * self.width)).float()
+        self.register_buffer('pos_x', pos_x)
+        self.register_buffer('pos_y', pos_y)
+        self.register_buffer('pos_y', pos_y)
+
+    def forward(self, feature):
+                # Output:
+        #   (N, C*2) x_0 y_0 ...
+        if self.data_format == 'NHWC':
+            feature = feature.transpose(1, 3).tranpose(
+                2, 3).view(-1, self.height * self.width)
+        else:
+            feature = feature.view(-1, self.height * self.width)
+
+        softmax_attention = F.softmax(feature / self.temperature, dim=-1)
+        expected_x = torch.sum(Variable(self.pos_x) *
+                               softmax_attention, dim=1, keepdim=True)
+        expected_y = torch.sum(Variable(self.pos_y) *
+                               softmax_attention, dim=1, keepdim=True)
+        expected_xy = torch.cat([expected_x, expected_y], 1)
+        feature_keypoints = expected_xy.view(-1, self.channel * 2)
+
+        return feature_keypoints
 '''
 -> Decoder
 '''
@@ -344,28 +401,33 @@ class ConstHead(nn.Module):
         # Table 2, best performance with two 3x3 convs
         self.output = nn.Sequential(
                 # Block(low_level_channels,128,1),
-                nn.Conv2d(low_level_channels,8,1),
-                # Block(128, 64, 2),
-                nn.Dropout(0.1),
-                nn.BatchNorm2d(8),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(8, 4, 1),
-                nn.Dropout(0.1),
-                nn.BatchNorm2d(4),
-                nn.ReLU(inplace=True),
-                nn.Flatten(),
-                # nn.Linear(1024, 512),# TODO img size 256
-                nn.Linear(1444, 512),# TODO img size 256
-                # # # nn.Linear(6400, 512),
+#                 nn.Conv2d(low_level_channels,512,padding=1, kernel_size=3, stride=1),
+                # # Block(128, 64, 2),
+                # nn.Dropout(0.1),
+                # nn.BatchNorm2d(512),
+                # nn.ReLU(inplace=True),
+                # # nn.Conv2d(8, 4, 1),
+                # nn.Conv2d(512,512,padding=1, kernel_size=3, stride=1),
+                # nn.Dropout(0.1),
+                # nn.BatchNorm2d(512),
+                # nn.ReLU(inplace=True),
+                SpatialSoftmax(
+                    channel=low_level_channels, height=19, width=19) ,
+                # nn.Flatten(),
+                # # nn.Linear(1024, 512),# TODO img size 256
+                # nn.Linear(1444, 512),# TODO img size 300
+                nn.Linear(512, 512),# TODO img size 300
+                # # # # nn.Linear(6400, 512),
                 # nn.GELU(),
                 nn.ReLU(),
-                # nn.Dropout(0.1),
+                # # nn.Dropout(0.1),
                 nn.Linear(512,nz),
         )
         initialize_weights(self)
 
     def forward(self, x):
         x = self.output(x)
+        # print('x: {}'.format(x.shape))
         return x
 
 
@@ -390,15 +452,20 @@ class DeepLab(BaseModel):
 
         self.ASSP = ASSP(in_channels=2048, output_stride=output_stride)
         self.decoder = Decoder(low_level_channels, num_classes)
-        self.cont_head = ConstHead(2048)
+        # before assp
+        # self.cont_head = ConstHead(2048)
+        # after assp
+        self.cont_head = ConstHead(256)
         if freeze_bn: self.freeze_bn()
 
     def forward(self, x,cont_head=False):
         H, W = x.size(2), x.size(3)
         x, low_level_features = self.backbone(x)
+   #      if cont_head:
+            # return self.cont_head(x)
+        x = self.ASSP(x)
         if cont_head:
             return self.cont_head(x)
-        x = self.ASSP(x)
         x = self.decoder(x, low_level_features)
         x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=True)
         return x

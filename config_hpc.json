@@ -1,5 +1,5 @@
 {
-    "name": "Deeplab_supergule_data7_noXYflip_1to2_sg_0.5",
+    "name": "Deeplab_cont_nca0.1_seg2_4to1_sgd_lr0.001",
     "n_gpu": 1,
     "use_synch_bn": true,
 
@@ -15,10 +15,10 @@
     "train_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/train_adaptation",
-            "view_idx_adapt": 2,
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/train_adaptation",
+            "view_idx_adapt": 1,
             "view_idx_labled": 4,
-            "examples_per_seq": 1,
+            "examples_per_seq": 2,
             "number_views": 5,
             "batch_size": 8,
             "base_size": 300,
@@ -37,7 +37,7 @@
     "val_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/val",
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/val",
             "batch_size": 32,
             "crop_size": 300,
             "examples_per_seq": 0,
@@ -51,10 +51,12 @@
         }
     },
     "optimizer": {
-        "type": "Adam",
-        "differential_lr": false,
+        "type": "SGD",
+        "differential_lr": true,
         "args":{
-            "lr": 0.01
+            "lr": 0.001,
+            "weight_decay": 1e-4,
+            "momentum": 0.9
         }
     },
     "loss": "CrossEntropyLoss2d",
@@ -65,19 +67,19 @@
     },
 
     "trainer": {
-        "epochs": 10000,
-        "save_dir": "saved_test_const/",
-        "save_period": 1000,
+        "epochs": 5000,
+        "save_dir": "saved_const/",
+        "save_period": 20,
   
         "monitor": "max Mean_IoU",
-        "early_stop": 100,
+        "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved_test_const/runs",
-        "log_per_iter": 100,
+        "log_dir": "saved_const/runs",
+        "log_per_iter": 5,
 
         "val": true,
-        "val_per_epochs": 500
+        "val_per_epochs": 20
     }
 }
 

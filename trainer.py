@@ -14,6 +14,7 @@ from torchvision.utils import save_image
 
 import torch.nn as nn
 import torch.nn.functional as F
+from pytorch_metric_learning import losses
 
 def sliding_window(sequence, winSize, step=1, stride=1, drop_last=False):
     """Returns a generator that will iterate through
@@ -46,7 +47,7 @@ def sliding_window(sequence, winSize, step=1, stride=1, drop_last=False):
             return
 
 
-def multi_vid_batch_loss(criterion_metric, batch, targets, num_vid_example,npair=True):
+def multi_vid_batch_loss(criterion_metric, batch, targets, num_vid_example):
     """ multiple view-pair in batch, metric loss for multi example for frame , only 2 view support"""
     batch_size = batch.size(0)
     emb_view0, emb_view1 = batch[: batch_size // 2], batch[batch_size // 2 :]
@@ -58,7 +59,7 @@ def multi_vid_batch_loss(criterion_metric, batch, targets, num_vid_example,npair
     for emb_view0_vid, emb_view1_vid, t0, t1 in zip(
         slid_vid(emb_view0), slid_vid(emb_view1), slid_vid(t_view0), slid_vid(t_view1)
     ):
-        if npair:
+        if isinstance(criterion_metric,NpairLoss):
             loss += criterion_metric(emb_view0_vid, emb_view1_vid, t0)
         else:
             loss += criterion_metric(torch.cat((emb_view0_vid, emb_view1_vid)), torch.cat((t0, t1)))
@@ -150,8 +151,9 @@ class Trainer(BaseTrainer):
 
         torch.backends.cudnn.benchmark = True
         self.examples_per_seq = config['train_loader']['args']['examples_per_seq']
-        # self.metric_criterion = LiftedStruct()
-        self.metric_criterion = NpairLoss()
+        self.metric_criterion = losses.LiftedStructureLoss().to(self.device)
+        # self.metric_criterion = losses.NPairsLoss().to(self.device)
+        # self.metric_criterion = losses.NCALoss().to(self.device)
 
 
     def _train_epoch(self, epoch):
@@ -175,16 +177,9 @@ class Trainer(BaseTrainer):
             # LOSS & OPTIMIZE
             self.optimizer.zero_grad()
             output = self.model(data)
-            if self.config['arch']['type'][:3] == 'PSP':
-                assert output[0].size()[2:] == target.size()[1:]
-                assert output[0].size()[1] == self.num_classes
-                loss = self.loss(output[0], target)
-                loss += self.loss(output[1], target) * 0.4
-                output = output[0]
-            else:
-                assert output.size()[2:] == target.size()[1:], "output {}, target {}".format(output.shape,target.shape)
-                assert output.size()[1] == self.num_classes
-                loss = self.loss(output, target)
+            # assert output.size()[2:] == target.size()[1:], "output {}, target {}".format(output.shape,target.shape)
+            # assert output.size()[1] == self.num_classes
+            loss = self.loss(output, target)
             emb = self.model(torch.cat((data,input_a)),True)
 
             # loss_sg = self.loss(output_a, target_a_gule)
@@ -200,6 +195,7 @@ class Trainer(BaseTrainer):
                 loss_metric = loss_metric.mean()
                 loss = loss.mean()
             loss+= loss_metric*0.1
+            # loss_metric=torch.tensor(0)
             loss.backward()
             self.optimizer.step()
             self.total_loss.update(loss.item())
@@ -212,7 +208,7 @@ class Trainer(BaseTrainer):
             if batch_idx % self.log_step == 0:
                 self.wrt_step = (epoch - 1) * len(self.train_loader) + batch_idx
                 self.writer.add_scalar(f'{self.wrt_mode}/loss', loss.item(), self.wrt_step)
-                self.writer.add_scalar(f'{self.wrt_mode}/loss_metric', loss_metric.item(), self.wrt_step)
+                self.writer.add_scalar(f'{self.wrt_mode}/loss_metric', loss_metric, self.wrt_step)
 
             # FOR EVAL
             seg_metrics = eval_metrics(output, target, self.num_classes)
@@ -314,7 +310,7 @@ class Trainer(BaseTrainer):
                 'val_loss': self.total_loss.average,
                 **seg_metrics
             }
-
+        del output, data, data_a
         return log
 
     def _reset_metrics(self):
