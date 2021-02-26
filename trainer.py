@@ -151,9 +151,9 @@ class Trainer(BaseTrainer):
 
         torch.backends.cudnn.benchmark = True
         self.examples_per_seq = config['train_loader']['args']['examples_per_seq']
-        self.metric_criterion = losses.LiftedStructureLoss().to(self.device)
+        # self.metric_criterion = losses.LiftedStructureLoss().to(self.device)
         # self.metric_criterion = losses.NPairsLoss().to(self.device)
-        # self.metric_criterion = losses.NCALoss().to(self.device)
+        self.metric_criterion = losses.NCALoss().to(self.device)
 
 
     def _train_epoch(self, epoch):

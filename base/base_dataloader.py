@@ -22,6 +22,7 @@ class BaseDataLoader(DataLoader):
             'shuffle': self.shuffle,
             'num_workers': num_workers,
             'pin_memory': True,
+            'drop_last':True
             # 'sampler':sampler
         }
         super(BaseDataLoader, self).__init__(sampler=self.train_sampler, **self.init_kwargs)

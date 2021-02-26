@@ -297,7 +297,7 @@ class ASSP(nn.Module):
         x = self.bn1(x)
         x = self.dropout(self.relu(x))
 
-        return x
+        return x,x4
 
 '''
 -> Decoder
@@ -395,32 +395,20 @@ class SpatialSoftmax(nn.Module):
 -> Decoder
 '''
 
-class ConstHead(nn.Module):
+class ConstHeadSpatial(nn.Module):
     def __init__(self, low_level_channels,nz=32):
         super().__init__()
         # Table 2, best performance with two 3x3 convs
         self.output = nn.Sequential(
-                # Block(low_level_channels,128,1),
-#                 nn.Conv2d(low_level_channels,512,padding=1, kernel_size=3, stride=1),
-                # # Block(128, 64, 2),
-                # nn.Dropout(0.1),
-                # nn.BatchNorm2d(512),
-                # nn.ReLU(inplace=True),
-                # # nn.Conv2d(8, 4, 1),
-                # nn.Conv2d(512,512,padding=1, kernel_size=3, stride=1),
-                # nn.Dropout(0.1),
-                # nn.BatchNorm2d(512),
-                # nn.ReLU(inplace=True),
+                nn.Dropout(0.2),
+                nn.Conv2d(low_level_channels,low_level_channels,padding=1, kernel_size=3, stride=1,bias=False),
+                nn.BatchNorm2d(512),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.2),
                 SpatialSoftmax(
                     channel=low_level_channels, height=19, width=19) ,
-                # nn.Flatten(),
-                # # nn.Linear(1024, 512),# TODO img size 256
-                # nn.Linear(1444, 512),# TODO img size 300
                 nn.Linear(512, 512),# TODO img size 300
-                # # # # nn.Linear(6400, 512),
-                # nn.GELU(),
                 nn.ReLU(),
-                # # nn.Dropout(0.1),
                 nn.Linear(512,nz),
         )
         initialize_weights(self)
@@ -431,6 +419,38 @@ class ConstHead(nn.Module):
         return x
 
 
+class ConstHead(nn.Module):
+    def __init__(self, low_level_channels,nz=32):
+        super().__init__()
+        # Table 2, best performance with two 3x3 convs
+        self.output = nn.Sequential(
+                # block(low_level_channels,128,1),
+                Block(256, 512, stride=4, dilation=1),
+                Block(512, 1024, stride=4, dilation=1),
+                # nn.Conv2d(low_level_channels,728,padding=1, kernel_size=3, stride=1,bias=False),
+                # # Block(128, 64, 2),
+                # nn.Dropout(0.1),
+                # nn.BatchNorm2d(512),
+                # nn.ReLU(inplace=True),
+                # # nn.Conv2d(8, 4, 1),
+                # nn.Conv2d(512,512,padding=1, kernel_size=3, stride=1),
+                # nn.Dropout(0.1),
+                # nn.BatchNorm2d(512),
+                # nn.ReLU(inplace=True),
+                # SpatialSoftmax(
+                    # channel=low_level_channels, height=19, width=19) ,
+                nn.Flatten(),
+                nn.Linear(4096, 1024),# TODO img size 256
+                nn.ReLU(),
+                nn.Linear(1024, 512),# TODO img size 256
+                nn.ReLU(),
+                nn.Linear(512,nz),
+        )
+        initialize_weights(self)
+
+    def forward(self, x):
+        x = self.output(x)
+        return x
 
 
 '''
@@ -455,7 +475,7 @@ class DeepLab(BaseModel):
         # before assp
         # self.cont_head = ConstHead(2048)
         # after assp
-        self.cont_head = ConstHead(256)
+        self.cont_head = ConstHeadSpatial(256)
         if freeze_bn: self.freeze_bn()
 
     def forward(self, x,cont_head=False):
@@ -463,9 +483,9 @@ class DeepLab(BaseModel):
         x, low_level_features = self.backbone(x)
    #      if cont_head:
             # return self.cont_head(x)
-        x = self.ASSP(x)
+        x,x4 = self.ASSP(x)
         if cont_head:
-            return self.cont_head(x)
+            return self.cont_head(x4)
         x = self.decoder(x, low_level_features)
         x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=True)
         return x

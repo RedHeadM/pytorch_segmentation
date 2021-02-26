@@ -1,5 +1,5 @@
 {
-    "name": "Deeplab_cont_nca0.1_seg2_4to1_sgd_lr0.001",
+    "name": "Deeplab_cont_nca0.1_seg4_4to1_sgd_x4",
     "n_gpu": 1,
     "use_synch_bn": true,
 
@@ -18,7 +18,7 @@
             "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/train_adaptation",
             "view_idx_adapt": 1,
             "view_idx_labled": 4,
-            "examples_per_seq": 2,
+            "examples_per_seq": 4,
             "number_views": 5,
             "batch_size": 8,
             "base_size": 300,
@@ -54,7 +54,7 @@
         "type": "SGD",
         "differential_lr": true,
         "args":{
-            "lr": 0.001,
+            "lr": 0.01,
             "weight_decay": 1e-4,
             "momentum": 0.9
         }
@@ -68,7 +68,7 @@
 
     "trainer": {
         "epochs": 5000,
-        "save_dir": "saved_const/",
+        "save_dir": "saved_const_2/",
         "save_period": 20,
   
         "monitor": "max Mean_IoU",
