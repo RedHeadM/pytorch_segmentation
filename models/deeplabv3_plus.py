@@ -548,12 +548,13 @@ class DeepLab(BaseModel):
         x = self.decoder(x, low_level_features)
         x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=True)
         if cont_head:
-            p_lable = torch.softmax(x, dim=1)
-            # p_lable = torch.softmax(x.detach(),dim=1)
-            max_probs, p_target = torch.max(p_lable,dim=1)
-            p_target = torch.unsqueeze(p_target, 1)
-            p = self.encoder_seg(p_target.float())
-            return const_emb, p
+            # p_lable = torch.softmax(x, dim=1)
+            # # p_lable = torch.softmax(x.detach(),dim=1)
+            # max_probs, p_target = torch.max(p_lable,dim=1)
+            # p_target = torch.unsqueeze(p_target, 1)
+            # p = self.encoder_seg(p_target.float())
+            # return const_emb, p
+            return const_emb, None
         else:
             return x
 

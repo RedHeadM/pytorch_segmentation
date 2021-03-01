@@ -97,8 +97,7 @@ class Trainer(BaseTrainer):
         # self.metric_criterion = losses.NPairsLoss().to(self.device)
         self.metric_criterion = losses.NCALoss().to(self.device)
         bs=config['train_loader']['args']['batch_size']//self.examples_per_seq # times view
-        bs = int(config['train_loader']['args']['batch_size']//self.examples_per_seq*2) # times view
-        print('bs: {}'.format(bs))
+        # bs = int(config['train_loader']['args']['batch_size']//self.examples_per_seq*2) # times view
         self.batch_size = config['train_loader']['args']['batch_size']
         self.metric_criterion = NT_Xent(bs).to(self.device)
 
@@ -135,7 +134,7 @@ class Trainer(BaseTrainer):
                 n = data.size(0)
                 label_positive_pair = np.arange(n)
                 labels_full = torch.from_numpy(np.concatenate([label_positive_pair, label_positive_pair])).to(self.device)
-                labels_full = torch.cat((labels_full,labels_full))
+                # labels_full = torch.cat((labels_full,labels_full))
                 loss_metric = multi_vid_batch_loss(self.metric_criterion, emb, labels_full, num_vid_example=self.examples_per_seq)[0]
 
                 if isinstance(self.loss, torch.nn.DataParallel):
