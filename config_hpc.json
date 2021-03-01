@@ -1,5 +1,5 @@
 {
-    "name": "Deeplab_cont_nca0.1_seg4_4to1_sgd_x4",
+    "name": "Deeplab_cont_simclr.1_seg1_4to1_sgd_warup",
     "n_gpu": 1,
     "use_synch_bn": true,
 
@@ -18,11 +18,11 @@
             "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/train_adaptation",
             "view_idx_adapt": 1,
             "view_idx_labled": 4,
-            "examples_per_seq": 4,
+            "examples_per_seq": 1,
             "number_views": 5,
             "batch_size": 8,
             "base_size": 300,
-            "crop_size": 300,
+            "crop_size": 256,
             "augment": true,
             "shuffle": false,
             "scale": true,
@@ -39,7 +39,7 @@
         "args":{
             "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/val",
             "batch_size": 32,
-            "crop_size": 300,
+            "crop_size": 256,
             "examples_per_seq": 0,
             "view_idx_labled": 1,
             "view_idx_adapt": 1,
@@ -75,7 +75,7 @@
         "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved_const/runs",
+        "log_dir": "saved_const_test_2/runs",
         "log_per_iter": 5,
 
         "val": true,

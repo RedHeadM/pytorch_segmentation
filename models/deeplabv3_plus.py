@@ -10,6 +10,7 @@ from itertools import chain
 from torch.nn.parameter import Parameter
 import numpy as np
 from torch.autograd import Function, Variable
+from collections import OrderedDict
 
 '''
 -> ResNet BackBone
@@ -396,17 +397,17 @@ class SpatialSoftmax(nn.Module):
 '''
 
 class ConstHeadSpatial(nn.Module):
-    def __init__(self, low_level_channels,nz=32):
+    def __init__(self, low_level_channels,nz=64):
         super().__init__()
         # Table 2, best performance with two 3x3 convs
         self.output = nn.Sequential(
                 nn.Dropout(0.2),
                 nn.Conv2d(low_level_channels,low_level_channels,padding=1, kernel_size=3, stride=1,bias=False),
-                nn.BatchNorm2d(512),
+                nn.BatchNorm2d(low_level_channels),
                 nn.ReLU(inplace=True),
                 nn.Dropout(0.2),
-                SpatialSoftmax(
-                    channel=low_level_channels, height=19, width=19) ,
+                # SpatialSoftmax(channel=low_level_channels, height=19, width=19),# image 300
+                SpatialSoftmax(channel=low_level_channels, height=16, width=16),# image 300
                 nn.Linear(512, 512),# TODO img size 300
                 nn.ReLU(),
                 nn.Linear(512,nz),
@@ -415,7 +416,7 @@ class ConstHeadSpatial(nn.Module):
 
     def forward(self, x):
         x = self.output(x)
-        # print('x: {}'.format(x.shape))
+        print('x: {}'.format(x.shape))
         return x
 
 
@@ -440,7 +441,7 @@ class ConstHead(nn.Module):
                 # SpatialSoftmax(
                     # channel=low_level_channels, height=19, width=19) ,
                 nn.Flatten(),
-                nn.Linear(4096, 1024),# TODO img size 256
+                nn.Linear(4096, 1024),# TODO img size 300
                 nn.ReLU(),
                 nn.Linear(1024, 512),# TODO img size 256
                 nn.ReLU(),
@@ -450,7 +451,64 @@ class ConstHead(nn.Module):
 
     def forward(self, x):
         x = self.output(x)
+        print('x: {}'.format(x.shape))
         return x
+
+class DownBLock(nn.Module):
+    def __init__(self, in_feat,out_feat):
+        super().__init__()
+        self.encoder = nn.Sequential(OrderedDict([
+            ('pyramid{0}-{1}conv'.format(in_feat, out_feat),
+                        nn.Conv2d(in_feat,out_feat, 4, 2, 1, bias=False)),
+            ('pyramid{0}dropouyt'.format(out_feat), nn.Dropout2d(0.2)),
+            ('pyramid{0}batchnorm'.format(out_feat), nn.BatchNorm2d(out_feat)),
+            ('pyramid{0}relu'.format(out_feat),nn.GELU())
+            # ('pyramid{0}relu'.format(out_feat),nn.LeakyReLU(0.1))
+        ]))
+
+        initialize_weights(self)
+    def forward(self,x):
+        return self.encoder(x)
+
+
+class Encoder(nn.Module):
+    def __init__(self, imageSize=256, nz=64, nc=1, ngf=32):
+        super(Encoder, self).__init__()
+        print('nz: {}'.format(nz))
+        print('ngf: {}'.format(ngf))
+        self.nz=nz
+        n = math.log2(imageSize)
+        assert n == round(n), 'imageSize must be a power of 2'
+        assert n >= 3, 'imageSize must be at least 8'
+        n = int(n)
+
+        # mu and sig
+        self.conv1 = nn.Conv2d(ngf * 2**(n-3), nz, 4)
+        self.encoder = nn.Sequential()
+        modules = {}
+        # input is (nc) x 64 x 64
+
+        self.init_conv = nn.Sequential(OrderedDict([
+            ('input-conv', nn.Conv2d(nc, ngf, 4, 2, 1, bias=False)),
+            ('input-relu', nn.GELU()),
+            # ('input-relu', nn.LeakyReLU(0.1)),
+        ]))
+
+        self.encoder.add_module('input-relu-block', self.init_conv)
+
+        for i in range(n-3):
+            in_feat=ngf*2**(i)
+            out_feat= ngf * 2**(i+1)
+            print('i {} encoder in_fear {} out_feat: {}'.format(i, in_feat, out_feat))
+            self.encoder.add_module("downblock{}".format(i),DownBLock(in_feat,out_feat))
+        # state size. (ngf*8) x 4 x 4
+
+        initialize_weights(self)
+
+    def forward(self, input):
+        output = self.encoder(input)
+
+        return self.conv1(output).view(-1,self.nz)
 
 
 '''
@@ -476,19 +534,28 @@ class DeepLab(BaseModel):
         # self.cont_head = ConstHead(2048)
         # after assp
         self.cont_head = ConstHeadSpatial(256)
+        self.encoder_seg = Encoder()
         if freeze_bn: self.freeze_bn()
 
-    def forward(self, x,cont_head=False):
+    def forward(self, x, cont_head=False):
         H, W = x.size(2), x.size(3)
         x, low_level_features = self.backbone(x)
    #      if cont_head:
             # return self.cont_head(x)
         x,x4 = self.ASSP(x)
         if cont_head:
-            return self.cont_head(x4)
+            const_emb = self.cont_head(x)
         x = self.decoder(x, low_level_features)
         x = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=True)
-        return x
+        if cont_head:
+            p_lable = torch.softmax(x, dim=1)
+            # p_lable = torch.softmax(x.detach(),dim=1)
+            max_probs, p_target = torch.max(p_lable,dim=1)
+            p_target = torch.unsqueeze(p_target, 1)
+            p = self.encoder_seg(p_target.float())
+            return const_emb, p
+        else:
+            return x
 
     # Two functions to yield the parameters of the backbone
     # & Decoder / ASSP to use differentiable learning rates
@@ -499,7 +566,7 @@ class DeepLab(BaseModel):
         return self.backbone.parameters()
 
     def get_decoder_params(self):
-        return chain(self.ASSP.parameters(), self.decoder.parameters(), self.cont_head.parameters())
+        return chain(self.ASSP.parameters(), self.decoder.parameters(), self.cont_head.parameters(),self.encoder_seg.parameters())
 
     def freeze_bn(self):
         assert False

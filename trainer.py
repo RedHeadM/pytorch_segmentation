@@ -15,6 +15,7 @@ from torchvision.utils import save_image
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_metric_learning import losses
+from nt_xent import NT_Xent
 
 def sliding_window(sequence, winSize, step=1, stride=1, drop_last=False):
     """Returns a generator that will iterate through
@@ -59,72 +60,13 @@ def multi_vid_batch_loss(criterion_metric, batch, targets, num_vid_example):
     for emb_view0_vid, emb_view1_vid, t0, t1 in zip(
         slid_vid(emb_view0), slid_vid(emb_view1), slid_vid(t_view0), slid_vid(t_view1)
     ):
-        if isinstance(criterion_metric,NpairLoss):
-            loss += criterion_metric(emb_view0_vid, emb_view1_vid, t0)
+        if isinstance(criterion_metric,NT_Xent):
+            # loss += criterion_metric(emb_view0_vid, emb_view1_vid, t0)
+            loss += criterion_metric(emb_view0_vid, emb_view1_vid)
         else:
             loss += criterion_metric(torch.cat((emb_view0_vid, emb_view1_vid)), torch.cat((t0, t1)))
     return loss
 
-def _pdist(A, squared=False, eps=1e-4):
-    prod = torch.mm(A, A.t())
-    norm = prod.diag().unsqueeze(1).expand_as(prod)
-    res = (norm + norm.t() - 2 * prod).clamp(min=0)
-    return res if squared else res.clamp(min=eps).sqrt()
-
-
-class LiftedStruct(nn.Module):
-    """Lifted Structured Feature Embedding
-    https://arxiv.org/abs/1511.06452
-    based on: https://github.com/vadimkantorov/metriclearningbench
-    see also: https://gist.github.com/bkj/565c5e145786cfd362cffdbd8c089cf4
-    """
-
-    def forward(self, embeddings, labels, margin=1.0, eps=1e-4):
-        loss = torch.zeros(1)
-        if torch.cuda.is_available():
-            loss = loss.cuda()
-        # L_{ij} = \log (\sum_{i, k} exp\{m - D_{ik}\} + \sum_{j, l} exp\{m - D_{jl}\}) + D_{ij}
-        # L = \frac{1}{2|P|}\sum_{(i,j)\in P} \max(0, J_{i,j})^2
-        d = _pdist(embeddings, squared=False, eps=eps)
-        # pos mat  1 where labels are same for distance mat
-        pos = torch.eq(*[labels.unsqueeze(dim).expand_as(d) for dim in [0, 1]]).type_as(d)
-
-        neg_i = torch.mul((margin - d).exp(), 1 - pos).sum(1).expand_as(d)
-        loss += torch.sum(F.relu(pos.triu(1) * ((neg_i + neg_i.t()).log() + d)).pow(2)) / (pos.sum() - len(d))
-        return loss
-
-def cross_entropy(logits, target, size_average=True):
-    if size_average:
-        return torch.mean(torch.sum(- target * F.log_softmax(logits, -1), -1))
-    else:
-        return torch.sum(torch.sum(- target * F.log_softmax(logits, -1), -1))
-
-
-class NpairLoss(nn.Module):
-    """the multi-class n-pair loss
-        from: https://github.com/ChaofWang/Npair_loss_pytorch/blob/master/Npair_loss.py
-    """
-
-    def __init__(self, l2_reg=0.02):
-        super(NpairLoss, self).__init__()
-        self.l2_reg = l2_reg
-
-    def forward(self, anchor, positive, target):
-        '''
-            target are class labels
-        '''
-        batch_size = anchor.size(0)
-        target = target.view(target.size(0), 1)
-
-        target = (target == torch.transpose(target, 0, 1)).float()
-        target = target / torch.sum(target, dim=1, keepdim=True).float()
-
-        logit = torch.matmul(anchor, torch.transpose(positive, 0, 1))
-        loss_ce = cross_entropy(logit, target)
-        l2_loss = torch.sum(anchor**2) / batch_size + torch.sum(positive**2) / batch_size
-
-        loss = loss_ce + self.l2_reg*l2_loss*0.25
-        return loss
 
 class Trainer(BaseTrainer):
     def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None, prefetch=True):
@@ -154,6 +96,11 @@ class Trainer(BaseTrainer):
         # self.metric_criterion = losses.LiftedStructureLoss().to(self.device)
         # self.metric_criterion = losses.NPairsLoss().to(self.device)
         self.metric_criterion = losses.NCALoss().to(self.device)
+        bs=config['train_loader']['args']['batch_size']//self.examples_per_seq # times view
+        bs = int(config['train_loader']['args']['batch_size']//self.examples_per_seq*2) # times view
+        print('bs: {}'.format(bs))
+        self.batch_size = config['train_loader']['args']['batch_size']
+        self.metric_criterion = NT_Xent(bs).to(self.device)
 
 
     def _train_epoch(self, epoch):
@@ -180,22 +127,23 @@ class Trainer(BaseTrainer):
             # assert output.size()[2:] == target.size()[1:], "output {}, target {}".format(output.shape,target.shape)
             # assert output.size()[1] == self.num_classes
             loss = self.loss(output, target)
-            emb = self.model(torch.cat((data,input_a)),True)
+            if epoch >10:
+                emb, p_emb = self.model(torch.cat((data,input_a)),True)
+                p_emb = torch.cat((p_emb[self.batch_size:],p_emb[self.batch_size:]))
+                emb = torch.cat((emb,p_emb))
+                # loss_sg = self.loss(output_a, target_a_gule)
+                n = data.size(0)
+                label_positive_pair = np.arange(n)
+                labels_full = torch.from_numpy(np.concatenate([label_positive_pair, label_positive_pair])).to(self.device)
+                labels_full = torch.cat((labels_full,labels_full))
+                loss_metric = multi_vid_batch_loss(self.metric_criterion, emb, labels_full, num_vid_example=self.examples_per_seq)[0]
 
-            # loss_sg = self.loss(output_a, target_a_gule)
-            n = data.size(0)
-            label_positive_pair = np.arange(n)
-            # labels = torch.from_numpy(label_positive_pair).to(self.device)
-            labels_full = torch.from_numpy(np.concatenate([label_positive_pair, label_positive_pair])).to(self.device)
-            # loss_metric = self.metric_criterion(emb,labels)[0]
-            # loss_metric = self.metric_criterion(emb[:n],emb[n:],labels)
-            loss_metric = multi_vid_batch_loss(self.metric_criterion, emb, labels_full, num_vid_example=self.examples_per_seq)[0]
-
-            if isinstance(self.loss, torch.nn.DataParallel):
-                loss_metric = loss_metric.mean()
-                loss = loss.mean()
-            loss+= loss_metric*0.1
-            # loss_metric=torch.tensor(0)
+                if isinstance(self.loss, torch.nn.DataParallel):
+                    loss_metric = loss_metric.mean()
+                    loss = loss.mean()
+                loss+= loss_metric*0.1
+            else:
+                loss_metric=torch.tensor(0)
             loss.backward()
             self.optimizer.step()
             self.total_loss.update(loss.item())
