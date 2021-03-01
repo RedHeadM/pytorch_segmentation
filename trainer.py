@@ -126,7 +126,7 @@ class Trainer(BaseTrainer):
             # assert output.size()[2:] == target.size()[1:], "output {}, target {}".format(output.shape,target.shape)
             # assert output.size()[1] == self.num_classes
             loss = self.loss(output, target)
-            if epoch >10:
+            if epoch >20:
                 emb, p_emb = self.model(torch.cat((data,input_a)),True)
                 p_emb = torch.cat((p_emb[self.batch_size:],p_emb[self.batch_size:]))
                 emb = torch.cat((emb,p_emb))
