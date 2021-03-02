@@ -128,8 +128,8 @@ class Trainer(BaseTrainer):
             loss = self.loss(output, target)
             if epoch >20:
                 emb, p_emb = self.model(torch.cat((data,input_a)),True)
-                p_emb = torch.cat((p_emb[self.batch_size:],p_emb[self.batch_size:]))
-                emb = torch.cat((emb,p_emb))
+                # p_emb = torch.cat((p_emb[self.batch_size:],p_emb[self.batch_size:]))
+                # emb = torch.cat((emb,p_emb))
                 # loss_sg = self.loss(output_a, target_a_gule)
                 n = data.size(0)
                 label_positive_pair = np.arange(n)

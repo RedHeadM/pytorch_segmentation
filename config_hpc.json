@@ -1,5 +1,5 @@
 {
-    "name": "Deeplab_cont_simclr.1_seg1_4to1_sgd_warup",
+    "name": "Deeplab_cont_simclr0.1_seg1_4to1_sgd_warup",
     "n_gpu": 1,
     "use_synch_bn": true,
 
@@ -75,7 +75,7 @@
         "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved_const_test_2/runs",
+        "log_dir": "saved_const_2/runs",
         "log_per_iter": 5,
 
         "val": true,
