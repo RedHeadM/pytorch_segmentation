@@ -57,6 +57,81 @@ class Trainer(BaseTrainer):
             target_adapt[i,m[:,1],m[:,0]] = target[i,m[:,0],m[:,1]]
         return target_adapt
 
+def ias_thresh(conf_dict, c, alpha, w=None, gamma=1.0):
+    if w is None:
+        w = np.ones(c)
+    # threshold
+    cls_thresh = np.ones(c,dtype = np.float32)
+    for idx_cls in np.arange(0, c):
+        if conf_dict[idx_cls] != None:
+            arr = np.array(conf_dict[idx_cls])
+            cls_thresh[idx_cls] = np.percentile(arr, 100 * (1 - alpha * w[idx_cls] ** gamma))
+    return cls_thresh
+
+
+    def _create_pseudo_label(self, net_pseudo):
+        self.logger.info('\n')
+
+        self.model.train()
+        if self.model_staudet:
+            self.model_staudet.train()
+        if self.config['arch']['args']['freeze_bn']:
+            if isinstance(self.model, torch.nn.DataParallel): self.model.module.freeze_bn()
+            else: self.model.freeze_bn()
+        self.wrt_mode = 'train'
+
+        tic = time.time()
+        self._reset_metrics()
+        tbar = tqdm(self.train_loader, ncols=130)
+        PSEUDO_PL_ALPHA=1.
+        beta = #cfg.DATASET.TARGET.PSEUDO_PL_BETA
+        num_classes = 11#fg.MODEL.PREDICTOR.NUM_CLASSES
+        gamma=1.
+        for batch_idx, (data, target, input_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
+            for i, b in enumerate(t_train_data_sl):
+            logits_npy_files = []
+                        cls_thresh = np.ones(n_class)*0.9
+            if gpu == 0:
+                pbar = tqdm.tqdm(total=len(t_train_data_sl))
+            for i, b in enumerate(t_train_data_sl):
+                if gpu == 0 :
+                    pbar.update(1)
+                images = Variable(b[0].cuda())
+                names = b[2]
+                logits = nn.Softmax(dim=1)(net_pseudo(images))
+                # originsize
+                # logits = F.interpolate(logits, size=origin_size[::-1], mode="bilinear", align_corners=True)
+
+                max_items = logits.max(dim=1)
+                label_pred = max_items[1].data.cpu().numpy()
+                logits_pred = max_items[0].data.cpu().numpy()
+
+                logits_cls_dict = {c: [cls_thresh[c]] for c in range(n_class)}
+                for cls in range(n_class):
+                    logits_cls_dict[cls].extend(logits_pred[label_pred == cls].astype(np.float16))
+
+                # instance adaptive selector
+                tmp_cls_thresh = ias_thresh(logits_cls_dict, alpha=PSEUDO_PL_ALPHA,  cfg=num_classes, w=cls_thresh, gamma=gamma)
+                cls_thresh = beta*cls_thresh + (1-beta)*tmp_cls_thresh
+                cls_thresh[cls_thresh>=1] = 0.999
+
+                np_logits = logits.data.cpu().numpy()
+                for _i, name in enumerate(names):
+                    name = os.path.splitext(os.path.basename(name))[0]
+                    # save pseudo label
+                    logit = np_logits[_i].transpose(1,2,0)
+                    label = np.argmax(logit, axis=2)
+                    logit_amax = np.amax(logit, axis=2)
+                    label_cls_thresh = np.apply_along_axis(lambda x: [cls_thresh[e] for e in x], 1, label)
+                    ignore_index = logit_amax < label_cls_thresh
+                    label[ignore_index] = 255
+                    pseudo_label_name = name + '_pseudo_label.png'
+                    pseudo_color_label_name = name + '_pseudo_color_label.png'
+                    pseudo_label_path = os.path.join(pseudo_save_dir, pseudo_label_name)
+                    pseudo_color_label_path = os.path.join(pseudo_save_dir, pseudo_color_label_name)
+                    Image.fromarray(label.astype(np.uint8)).convert('P').save(pseudo_label_path)
+                    # colorize_mask(label).save(pseudo_color_label_path)
+
     def _train_epoch(self, epoch):
         self.logger.info('\n')
 
