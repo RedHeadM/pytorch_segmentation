@@ -123,12 +123,12 @@ class BaseDataSet(Dataset):
         return len(self.files)
 
     def __getitem__(self, index):
-        image, label,imge_a, lable_a,mkpt1,m_cnt = self._load_data(index)
+        image, label,imge_a, label_a,mkpt1,m_cnt = self._load_data(index)
         if self.val:
             image, label = self._val_augmentation(image, label)
         elif self.augment:
             image, label = self._augmentation(image, label)
-            image_a, label_a = self._augmentation(image_a, label_a)
+            imge_a, label_a = self._augmentation(imge_a, label_a)
 
         label = torch.from_numpy(np.array(label, dtype=np.int32)).long()
         image = Image.fromarray(np.uint8(image))
@@ -136,9 +136,7 @@ class BaseDataSet(Dataset):
         imge_a = self.normalize(self.to_tensor(imge_a))
         label_a = torch.from_numpy(np.array(label_a, dtype=np.int32)).long()
 
-        # mkpt0 = torch.from_numpy(np.array(mkpt0, dtype=np.int32)).long()
-        # mkpt1 = torch.from_numpy(np.array(mkpt1, dtype=np.int32)).long()
-        return self.normalize(self.to_tensor(image)), label,imge_a, lable_a, mkpt1, m_cnt
+        return self.normalize(self.to_tensor(image)), label,imge_a, label_a, mkpt1, m_cnt
 
     def __repr__(self):
         fmt_str = "Dataset: " + self.__class__.__name__ + "\n"

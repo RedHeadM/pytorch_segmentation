@@ -1,5 +1,5 @@
 {
-    "name": "Deeplab_train_base_data8_4to4_diff_bot",
+    "name": "Deeplab_train_base_data7_3to1_same_bot",
     "n_gpu": 1,
     "use_synch_bn": true,     
 
@@ -16,9 +16,9 @@
     "train_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/val",
-            "view_idx_adapt": 4,
-            "view_idx_labled": 4,
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/train_adaptation",
+            "view_idx_adapt": 1,
+            "view_idx_labled": 3,
             "number_views": 5,
             "batch_size": 16,
             "base_size": 300,
@@ -34,13 +34,33 @@
         }
     },
 
+    "pseudo_loader": {
+        "type": "MVB",
+        "args":{
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/train_adaptation",
+            "view_idx_adapt": 1,
+            "view_idx_labled": 3,
+            "number_views": 5,
+            "batch_size": 16,
+            "base_size": 300,
+            "crop_size": 300,
+            "augment": false,
+            "shuffle": false,
+            "scale": false,
+            "flip": false,
+            "rotate": false,
+            "blur": false,
+            "split": "train_aug",
+            "num_workers": 8
+        }
+    },
     "val_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/val_same_bot",
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/val",
             "batch_size": 32,
             "crop_size": 300,
-            "view_idx_labled": 4,
+            "view_idx_labled": 1,
             "view_idx_adapt": 1,
             "number_views": 5,
             "shuffle": true,
@@ -60,17 +80,6 @@
         }
     },
 
-    "superpoint": {
-        "nms_radius": 4,
-        "keypoint_threshold": 0.005,
-        "max_keypoints": 100
-    },
-    "superglue": {
-        "resize" : [300,300],
-        "weights": "outdoor",
-        "sinkhorn_iterations": 20,
-        "match_threshold": 0.2
-    },
     "loss": "CrossEntropyLoss2d",
     "ignore_index": 255,
     "lr_scheduler": {
@@ -80,14 +89,14 @@
 
     "trainer": {
         "epochs": 80,
-        "save_dir": "saved_steps_test/",
+        "save_dir": "saved_pseudo/",
         "save_period": 10,
   
         "monitor": "max Mean_IoU",
         "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved_steps_test/runs",
+        "log_dir": "saved_pseudo/runs",
         "log_per_iter": 20,
 
         "val": true,

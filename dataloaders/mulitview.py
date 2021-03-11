@@ -37,7 +37,10 @@ class MuiltivwDataset(BaseDataSet):
         super(MuiltivwDataset, self).__init__(**kwargs)
         print('data dir {}, view adapt {}, num views'.format(self.root, view_idx_adapt, number_views))
 
-        self.pseudo_dir =os.path.join(self.root,'../../pseudo_dir')
+        view_i= self.view_idx_labled
+        view_j= self.view_idx_adapt
+        key_match = 'view{}->view{}'.format(view_i,view_j)
+        self.pseudo_dir =os.path.join(self.root,'../../seg_pseudo_dir_{}'.format(key_match))
         os.makedirs(self.pseudo_dir, exist_ok=True)
 
     def _set_files(self):

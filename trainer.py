@@ -16,8 +16,8 @@ from PIL import Image
 import os
 
 class Trainer(BaseTrainer):
-    def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None, prefetch=True, model_staudet=None):
-        super(Trainer, self).__init__(model, loss, resume, config, train_loader, val_loader, train_logger,model_staudet=model_staudet)
+    def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None, prefetch=True, model_staudet=None,pseudo_loader=None):
+        super(Trainer, self).__init__(model, loss, resume, config, train_loader, val_loader, train_logger,model_staudet = model_staudet)
 
         self.wrt_mode, self.wrt_step = 'train_', 0
         self.log_step = config['trainer'].get('log_per_iter', int(np.sqrt(self.train_loader.batch_size)))
@@ -32,6 +32,7 @@ class Trainer(BaseTrainer):
         self.viz_transform = transforms.Compose([
             transforms.Resize((400, 400)),
             transforms.ToTensor()])
+        self.pseudo_loader=pseudo_loader
 
         if self.device ==  torch.device('cpu'): prefetch = False
         if prefetch:
@@ -40,26 +41,11 @@ class Trainer(BaseTrainer):
 
         torch.backends.cudnn.benchmark = True
 
+        self._no_pseudo= True
         self.label_relax=False
         if self.label_relax:
             wt_bound = 1.0
             self.label_relax_loss = ImgWtLossSoftNLL(classes=self.num_classes, ignore_index=255, upper_bound=wt_bound)
-
-    def _get_glue_mask(self,target, mkpt0, mkpt1,m_cnt, ignore_idx=255, p_lable=None):
-        if p_lable is not None:
-            target_adapt = p_lable
-        else:
-            target_adapt = torch.full_like(target,ignore_idx)
-        for i in range(target.size(0)):
-        # for (x0, y0), (x1, y1) in zip(mkpts0, mkpts1):
-            # rm padding
-            if m_cnt[i]==0:
-                print('no superpoints found m_cnt: {}'.format(m_cnt))
-                continue
-            m=mkpt1[i,:m_cnt[i]]
-            # x y flip
-            target_adapt[i,m[:,1],m[:,0]] = target[i,m[:,0],m[:,1]]
-        return target_adapt
 
     def ias_thresh(self,conf_dict, c, alpha, w=None, gamma=1.0):
         if w is None:
@@ -86,13 +72,15 @@ class Trainer(BaseTrainer):
 
         tic = time.time()
         self._reset_metrics()
-        tbar = tqdm(self.train_loader, ncols=130)
-        PSEUDO_PL_ALPHA=1.
-        beta = 1. #cfg.DATASET.TARGET.PSEUDO_PL_BETA
+        tbar = tqdm(self.pseudo_loader, ncols=130)
+        PSEUDO_PL_ALPHA=0.2
+        beta = 0.9 #cfg.DATASET.TARGET.PSEUDO_PL_BETA
         num_classes = self.train_loader.dataset.num_classes #fg.MODEL.PREDICTOR.NUM_CLASSES
-        gamma=1.
+        gamma = 0.8
+
         cls_thresh = np.ones(num_classes)*0.9
         pseudo_save_dir = self.train_loader.dataset.pseudo_dir
+
 
         with torch.no_grad():
             # TODO not aumentations
@@ -131,7 +119,6 @@ class Trainer(BaseTrainer):
                     ignore_index = logit_amax < label_cls_thresh
                     label[ignore_index] = 255
                     pseudo_label_name = name + str(frame)+'_pseudo_label.png'
-                    print('pseudo_label_name: {}'.format(pseudo_label_name))
                     pseudo_color_label_name = name + str(frame)+'_pseudo_color_label.png'
                     pseudo_label_path = os.path.join(pseudo_save_dir, pseudo_label_name)
                     pseudo_color_label_path = os.path.join(pseudo_save_dir, pseudo_color_label_name)
@@ -146,7 +133,14 @@ class Trainer(BaseTrainer):
         tbar.close()
 
     def _train_epoch(self, epoch):
-        self._create_pseudo_label(self.model,epoch)
+        if epoch >5:
+            use_pseudo = True
+            if epoch %5 ==0 or self._no_pseudo:
+                self._create_pseudo_label(self.model,epoch)
+                self._no_pseudo = False
+        else:
+            use_pseudo = False
+
         self.logger.info('\n')
 
         self.model.train()
@@ -160,7 +154,8 @@ class Trainer(BaseTrainer):
         tic = time.time()
         self._reset_metrics()
         tbar = tqdm(self.train_loader, ncols=130)
-        for batch_idx, (data, target, input_a, p_target, comm_name,frame_idx) in enumerate(tbar):
+
+        for batch_idx, (data, target, input_a, target_a, comm_name,frame_idx) in enumerate(tbar):
             # self._valid_epoch(epoch) # DEBUG
             self.data_time.update(time.time() - tic)
             # data, target = data.to(self.device), target.to(self.device)
@@ -169,37 +164,12 @@ class Trainer(BaseTrainer):
 
             # LOSS & OPTIMIZE
             self.optimizer.zero_grad()
-            output = self.model(data)
-            if self.config['arch']['type'][:3] == 'PSP':
-                assert output[0].size()[2:] == target.size()[1:]
-                assert output[0].size()[1] == self.num_classes
-                loss = self.loss(output[0], target)
-                loss += self.loss(output[1], target) * 0.4
-                output = output[0]
+            if use_pseudo:
+                output = self.model(input_a)
+                loss = self.loss(output, target_a)
             else:
-                assert output.size()[2:] == target.size()[1:], "output {}, target {}".format(output.shape,target.shape)
-                assert output.size()[1] == self.num_classes
+                output = self.model(data)
                 loss = self.loss(output, target)
-            # if epoch >1:
-                # output_a = self.model(input_a)
-                # p_lable = torch.softmax(output_a.detach(),dim=1)
-                # max_probs, p_target = torch.max(p_lable,dim=1)
-                # target_a_gule= self._get_glue_mask(target, mkpt0, mkpt1, m_cnt, 255, p_target)
-
-                # if self.label_relax:
-                    # # toto super slow
-                    # target_a_gule=target_a_gule.detach().cpu()
-                    # relax_l=[]
-                    # for i in range(target_a_gule.size(0)):
-                        # lr = self.relax_labels(target_a_gule[i])
-                        # relax_l.append(lr.unsqueeze(0))
-                    # relax_l=torch.cat(relax_l,dim=0).cuda()
-                    # loss_sg = self.label_relax_loss(output_a,relax_l)
-                # elif self.model_staudet:
-                    # loss_sg = self.loss(self.model_staudet(input_a), target_a_gule)
-                # else:
-                    # loss_sg = self.loss(output_a, target_a_gule)
-                # loss+= loss_sg *0.1
 
             if isinstance(self.loss, torch.nn.DataParallel):
                 loss = loss.mean()

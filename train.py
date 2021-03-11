@@ -20,6 +20,7 @@ def main(config, resume):
 
     # DATA LOADERS
     train_loader = get_instance(dataloaders, 'train_loader', config)
+    pseudo_loader = get_instance(dataloaders, 'pseudo_loader', config)
     val_loader = get_instance(dataloaders, 'val_loader', config)
 
     # MODEL
@@ -43,6 +44,7 @@ def main(config, resume):
         resume=resume,
         config=config,
         train_loader=train_loader,
+        pseudo_loader=pseudo_loader,
         val_loader=val_loader,
         train_logger=train_logger,
         model_staudet=model_student)
