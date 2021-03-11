@@ -10,6 +10,10 @@ from utils.metrics import eval_metrics, AverageMeter
 from tqdm import tqdm
 from models.matching import Matching
 from utils.transformnvidia import ImgWtLossSoftNLL, RelaxedBoundaryLossToTensor
+import torch.nn as nn
+from torch.autograd import Variable
+from PIL import Image
+import os
 
 class Trainer(BaseTrainer):
     def __init__(self, model, loss, resume, config, train_loader, val_loader=None, train_logger=None, prefetch=True, model_staudet=None):
@@ -57,22 +61,22 @@ class Trainer(BaseTrainer):
             target_adapt[i,m[:,1],m[:,0]] = target[i,m[:,0],m[:,1]]
         return target_adapt
 
-def ias_thresh(conf_dict, c, alpha, w=None, gamma=1.0):
-    if w is None:
-        w = np.ones(c)
-    # threshold
-    cls_thresh = np.ones(c,dtype = np.float32)
-    for idx_cls in np.arange(0, c):
-        if conf_dict[idx_cls] != None:
-            arr = np.array(conf_dict[idx_cls])
-            cls_thresh[idx_cls] = np.percentile(arr, 100 * (1 - alpha * w[idx_cls] ** gamma))
-    return cls_thresh
+    def ias_thresh(self,conf_dict, c, alpha, w=None, gamma=1.0):
+        if w is None:
+            w = np.ones(c)
+        # threshold
+        cls_thresh = np.ones(c,dtype = np.float32)
+        for idx_cls in np.arange(0, c):
+            if conf_dict[idx_cls] != None:
+                arr = np.array(conf_dict[idx_cls])
+                cls_thresh[idx_cls] = np.percentile(arr, 100 * (1 - alpha * w[idx_cls] ** gamma))
+        return cls_thresh
 
 
-    def _create_pseudo_label(self, net_pseudo):
+    def _create_pseudo_label(self, net_pseudo, epoch):
         self.logger.info('\n')
 
-        self.model.train()
+        self.model.eval()
         if self.model_staudet:
             self.model_staudet.train()
         if self.config['arch']['args']['freeze_bn']:
@@ -84,20 +88,20 @@ def ias_thresh(conf_dict, c, alpha, w=None, gamma=1.0):
         self._reset_metrics()
         tbar = tqdm(self.train_loader, ncols=130)
         PSEUDO_PL_ALPHA=1.
-        beta = #cfg.DATASET.TARGET.PSEUDO_PL_BETA
-        num_classes = 11#fg.MODEL.PREDICTOR.NUM_CLASSES
+        beta = 1. #cfg.DATASET.TARGET.PSEUDO_PL_BETA
+        num_classes = self.train_loader.dataset.num_classes #fg.MODEL.PREDICTOR.NUM_CLASSES
         gamma=1.
-        for batch_idx, (data, target, input_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
-            for i, b in enumerate(t_train_data_sl):
-            logits_npy_files = []
-                        cls_thresh = np.ones(n_class)*0.9
-            if gpu == 0:
-                pbar = tqdm.tqdm(total=len(t_train_data_sl))
-            for i, b in enumerate(t_train_data_sl):
-                if gpu == 0 :
-                    pbar.update(1)
-                images = Variable(b[0].cuda())
-                names = b[2]
+        cls_thresh = np.ones(num_classes)*0.9
+        pseudo_save_dir = self.train_loader.dataset.pseudo_dir
+
+        with torch.no_grad():
+            # TODO not aumentations
+
+            for batch_idx, (data, target, input_a, _, comm_name, frame_idx) in enumerate(tbar):
+                tbar.update(1)
+                b = input_a
+                images = Variable(b.cuda())
+                names = comm_name
                 logits = nn.Softmax(dim=1)(net_pseudo(images))
                 # originsize
                 # logits = F.interpolate(logits, size=origin_size[::-1], mode="bilinear", align_corners=True)
@@ -106,17 +110,18 @@ def ias_thresh(conf_dict, c, alpha, w=None, gamma=1.0):
                 label_pred = max_items[1].data.cpu().numpy()
                 logits_pred = max_items[0].data.cpu().numpy()
 
-                logits_cls_dict = {c: [cls_thresh[c]] for c in range(n_class)}
-                for cls in range(n_class):
+                logits_cls_dict = {c: [cls_thresh[c]] for c in range(num_classes)}
+                for cls in range(num_classes):
                     logits_cls_dict[cls].extend(logits_pred[label_pred == cls].astype(np.float16))
 
                 # instance adaptive selector
-                tmp_cls_thresh = ias_thresh(logits_cls_dict, alpha=PSEUDO_PL_ALPHA,  cfg=num_classes, w=cls_thresh, gamma=gamma)
+                tmp_cls_thresh = self.ias_thresh(logits_cls_dict, alpha=PSEUDO_PL_ALPHA, c=num_classes, w=cls_thresh, gamma=gamma)
                 cls_thresh = beta*cls_thresh + (1-beta)*tmp_cls_thresh
                 cls_thresh[cls_thresh>=1] = 0.999
 
                 np_logits = logits.data.cpu().numpy()
-                for _i, name in enumerate(names):
+                dd=True
+                for _i, (name,frame) in enumerate(zip(names,frame_idx.cpu().numpy())):
                     name = os.path.splitext(os.path.basename(name))[0]
                     # save pseudo label
                     logit = np_logits[_i].transpose(1,2,0)
@@ -125,14 +130,23 @@ def ias_thresh(conf_dict, c, alpha, w=None, gamma=1.0):
                     label_cls_thresh = np.apply_along_axis(lambda x: [cls_thresh[e] for e in x], 1, label)
                     ignore_index = logit_amax < label_cls_thresh
                     label[ignore_index] = 255
-                    pseudo_label_name = name + '_pseudo_label.png'
-                    pseudo_color_label_name = name + '_pseudo_color_label.png'
+                    pseudo_label_name = name + str(frame)+'_pseudo_label.png'
+                    print('pseudo_label_name: {}'.format(pseudo_label_name))
+                    pseudo_color_label_name = name + str(frame)+'_pseudo_color_label.png'
                     pseudo_label_path = os.path.join(pseudo_save_dir, pseudo_label_name)
                     pseudo_color_label_path = os.path.join(pseudo_save_dir, pseudo_color_label_name)
-                    Image.fromarray(label.astype(np.uint8)).convert('P').save(pseudo_label_path)
-                    # colorize_mask(label).save(pseudo_color_label_path)
+                    img = Image.fromarray(label.astype(np.uint8)).convert('P').save(pseudo_label_path)
+                    palette = self.train_loader.dataset.palette
+                    img = colorize_mask(label,palette)
+                    if dd:
+                        self.writer.add_image(f'{self.wrt_mode}/inputs_targets_predictions', np.array([np.asarray(img)]), epoch)
+                        dd= False
+                    img = img.save(pseudo_color_label_path)
+                    # assert False
+        tbar.close()
 
     def _train_epoch(self, epoch):
+        self._create_pseudo_label(self.model,epoch)
         self.logger.info('\n')
 
         self.model.train()
@@ -146,7 +160,7 @@ def ias_thresh(conf_dict, c, alpha, w=None, gamma=1.0):
         tic = time.time()
         self._reset_metrics()
         tbar = tqdm(self.train_loader, ncols=130)
-        for batch_idx, (data, target, input_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
+        for batch_idx, (data, target, input_a, p_target, comm_name,frame_idx) in enumerate(tbar):
             # self._valid_epoch(epoch) # DEBUG
             self.data_time.update(time.time() - tic)
             # data, target = data.to(self.device), target.to(self.device)

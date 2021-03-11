@@ -16,7 +16,7 @@
     "train_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/train_adaptation",
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/val",
             "view_idx_adapt": 4,
             "view_idx_labled": 4,
             "number_views": 5,
@@ -80,14 +80,14 @@
 
     "trainer": {
         "epochs": 80,
-        "save_dir": "saved_steps_2/",
+        "save_dir": "saved_steps_test/",
         "save_period": 10,
   
         "monitor": "max Mean_IoU",
         "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved_steps_2/runs",
+        "log_dir": "saved_steps_test/runs",
         "log_per_iter": 20,
 
         "val": true,

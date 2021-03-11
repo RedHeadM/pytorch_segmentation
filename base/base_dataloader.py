@@ -55,7 +55,7 @@ class DataPrefetcher(object):
         self.next_input = None
         self.next_input_a = None
         self.next_target = None
-        self.mkpt0 = None
+        self.target_adtapt = None
         self.mkpt1 = None
         self.m_cnt = None
         self.device = device
@@ -65,12 +65,12 @@ class DataPrefetcher(object):
 
     def preload(self):
         try:
-            self.next_input, self.next_target,self.next_input_a,self.mkpt0,self.mkpt1,self.m_cnt = next(self.loaditer)
+            self.next_input, self.next_target,self.next_input_a,self.target_adtapt,self.mkpt1,self.m_cnt = next(self.loaditer)
         except StopIteration:
             self.next_input = None
             self.next_target = None
             self.m_cnt = None
-            self.mkpt0 = None
+            self.target_adtapt = None
             self.mkpt1 = None
             self.next_input_a = None
             return
@@ -78,6 +78,7 @@ class DataPrefetcher(object):
             self.next_input = self.next_input.cuda(device=self.device, non_blocking=True)
             self.next_target = self.next_target.cuda(device=self.device, non_blocking=True)
             self.next_input_a = self.next_input_a.cuda(device=self.device, non_blocking=True)
+            self.target_adtapt = self.target_adtapt.cuda(device=self.device, non_blocking=True)
 
     def __iter__(self):
         count = 0
@@ -88,11 +89,11 @@ class DataPrefetcher(object):
             input = self.next_input
             input_a = self.next_input_a
             target = self.next_target
-            mkpt0 = self.mkpt0
+            mkpt0 = self.target_adtapt
             m_cnt=self.m_cnt
             mkpt1 = self.mkpt1
             self.preload()
             count += 1
-            yield input, target,input_a, mkpt0, mkpt1,m_cnt
+            yield input, target, input_a, mkpt0, mkpt1, m_cnt
             if type(self.stop_after) is int and (count > self.stop_after):
                 break

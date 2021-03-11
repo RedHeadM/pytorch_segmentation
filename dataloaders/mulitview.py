@@ -36,8 +36,9 @@ class MuiltivwDataset(BaseDataSet):
         assert isinstance(view_idx_adapt, int) and isinstance(number_views, int)
         super(MuiltivwDataset, self).__init__(**kwargs)
         print('data dir {}, view adapt {}, num views'.format(self.root, view_idx_adapt, number_views))
-        self.match_dir=os.path.join(self.root,'../../superglue')
-        # self.match_dir=os.path.join(self.root,'../../superglue_train')
+
+        self.pseudo_dir =os.path.join(self.root,'../../pseudo_dir')
+        os.makedirs(self.pseudo_dir, exist_ok=True)
 
     def _set_files(self):
         def data_len_filter(comm_name,frame_len_paris):
@@ -73,28 +74,36 @@ class MuiltivwDataset(BaseDataSet):
         image = np.asarray(image, dtype=np.float32)
         label = np.asarray(label, dtype=np.int32)
 
+        cm=s["common name"]
+        frame_idx =s["frame index"]
         image_adapt = s[self.view_key_img_adapt]
+        # check for pseudo lebels
+        dat_lable = cm + str(frame_idx)+'_pseudo_label.png'
+        dat_lable = os.path.join(self.pseudo_dir,dat_lable)
+        if os.path.exists(dat_lable):
+            label_adapt = np.asarray(Image.open(dat_lable), dtype=np.int32)
+        else:
+            label_adapt=0
         image_adapt = np.asarray(image_adapt, dtype=np.float32)
 
-        cm=s["common name"]
-        frame_idx=s["frame index"]
         # get superglue match for json
-        view_i= min(self.view_idx_labled,self.view_idx_adapt)
-        view_j= max(self.view_idx_labled,self.view_idx_adapt)
-        i, j = frame_idx,frame_idx
-        key_match = 'view{}:frame{}->view{}:frame{}'.format(view_i,i,view_j,j)
-        match_file = os.path.join(self.match_dir, cm+".txt")
-        try:
-            with open(match_file) as f:
-                data_match = json.load(f)[key_match]
+        # view_i= min(self.view_idx_labled,self.view_idx_adapt)
+        # view_j= max(self.view_idx_labled,self.view_idx_adapt)
+        # i, j = frame_idx,frame_idx
+        # key_match = 'view{}:frame{}->view{}:frame{}'.format(view_i,i,view_j,j)
+        # match_file = os.path.join(self.match_dir, cm+".txt")
+        # try:
+            # with open(match_file) as f:
+                # data_match = json.load(f)[key_match]
 
-            # matches
-            mkpts0, m_cnt = self._pad_match(data_match['mkpts0'])
-            mkpts1,m_cnt1 = self._pad_match(data_match['mkpts1'])
-            assert m_cnt==m_cnt1
-        except:
-            mkpts0,mkpts1,m_cnt= 0,0,0
-        return image, label,image_adapt, mkpts0,mkpts1,m_cnt
+            # # matches
+            # mkpts0, m_cnt = self._pad_match(data_match['mkpts0'])
+            # mkpts1,m_cnt1 = self._pad_match(data_match['mkpts1'])
+            # assert m_cnt==m_cnt1
+        # except:
+        mkpts0,mkpts1,m_cnt= 0,0,0
+
+        return image, label, image_adapt, label_adapt, cm, frame_idx
 
 class MVB(BaseDataLoader):
     def __init__(self, data_dir, batch_size, split, crop_size=None, base_size=None, scale=True, num_workers=1, val=False,
