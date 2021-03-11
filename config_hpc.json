@@ -1,5 +1,5 @@
 {
-    "name": "Deeplab_train_base_data8_1to4_same_bot",
+    "name": "Deeplab_train_base_data8_4to4_diff_bot",
     "n_gpu": 1,
     "use_synch_bn": true,     
 
@@ -18,7 +18,7 @@
         "args":{
             "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/train_adaptation",
             "view_idx_adapt": 4,
-            "view_idx_labled": 1,
+            "view_idx_labled": 4,
             "number_views": 5,
             "batch_size": 16,
             "base_size": 300,
@@ -37,7 +37,7 @@
     "val_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/val",
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10080/videos/val_same_bot",
             "batch_size": 32,
             "crop_size": 300,
             "view_idx_labled": 4,
@@ -80,14 +80,14 @@
 
     "trainer": {
         "epochs": 80,
-        "save_dir": "saved_steps/",
+        "save_dir": "saved_steps_2/",
         "save_period": 10,
   
         "monitor": "max Mean_IoU",
         "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved_steps/runs",
+        "log_dir": "saved_steps_2/runs",
         "log_per_iter": 20,
 
         "val": true,
