@@ -1,5 +1,5 @@
 {
-    "name": "Deeplab_train_base_data7_4to1_mom_warmup5_same_bot",
+    "name": "DL_data7_4to1_mom_warmup1_same_bot_prob0.9_loss_a0.9",
     "n_gpu": 1,
     "use_synch_bn": true,     
 

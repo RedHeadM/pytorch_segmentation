@@ -79,7 +79,8 @@ class Trainer(BaseTrainer):
 
         self.model.eval()
         if self.model_staudet:
-            self.model_staudet.train()
+            # self.model_staudet.train()
+            self.model_staudet.eval()
         if self.config['arch']['args']['freeze_bn']:
             if isinstance(self.model, torch.nn.DataParallel): self.model.module.freeze_bn()
             else: self.model.freeze_bn()
@@ -149,7 +150,7 @@ class Trainer(BaseTrainer):
         tbar.close()
 
     def _train_epoch(self, epoch):
-        if epoch >5:
+        if epoch >1:
             use_pseudo = True
             # if epoch %1 ==0 or self._no_pseudo:
                 # self._create_pseudo_label(self.model,epoch)
@@ -164,7 +165,8 @@ class Trainer(BaseTrainer):
 
         self.model.train()
         if self.model_staudet:
-            self.model_staudet.train()
+            # self.model_staudet.train()
+            self.model_staudet.eval()
         if self.config['arch']['args']['freeze_bn']:
             if isinstance(self.model, torch.nn.DataParallel): self.model.module.freeze_bn()
             else: self.model.freeze_bn()
@@ -174,10 +176,9 @@ class Trainer(BaseTrainer):
         self._reset_metrics()
         val_visual=[]
         tbar = tqdm(self.train_loader, ncols=130)
-
         for batch_idx, (data, target, input_a, _, comm_name,frame_idx) in enumerate(tbar):
-
-            self._momentum_update_key_encoder()
+            if use_pseudo:
+                self._momentum_update_key_encoder()
             # self._valid_epoch(epoch) # DEBUG
             self.data_time.update(time.time() - tic)
             # data, target = data.to(self.device), target.to(self.device)
@@ -191,10 +192,9 @@ class Trainer(BaseTrainer):
                     output_a = self.model_staudet(input_a)
                     pseudo_label = torch.softmax(output_a.detach(), dim=1)
                     max_probs, targets_u_w = torch.max(pseudo_label, dim=1)
-                    targets_u_w[max_probs<0.9]= 255
-                    # max_probs[max_probs<0.9] = 0
+                    targets_u_w[max_probs<0.8] = 255
 
-                output = self.model(input_a)
+                output_a = self.model(input_a)
                 loss = self.loss(output_a, targets_u_w)*0.9
                 if continue_tain:
                     output = self.model(data)
@@ -298,10 +298,10 @@ class Trainer(BaseTrainer):
             for batch_idx, (data, target, data_a, mkpt0, mkpt1,m_cnt) in enumerate(tbar):
                 #data, target = data.to(self.device), target.to(self.device)
                 # LOSS
-                if self.model_staudet:
-                    output = self.model_staudet(data)
-                else:
-                    output = self.model(data)
+#                 if self.model_staudet:
+                    # output = self.model_staudet(data)
+                # else:
+                output = self.model(data)
                 loss = self.loss(output, target)
                 if isinstance(self.loss, torch.nn.DataParallel):
                     loss = loss.mean()
