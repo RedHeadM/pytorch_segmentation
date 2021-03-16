@@ -12,11 +12,10 @@ from PIL import Image
 import cv2
 from torch.utils.data import Dataset
 from torchvision import transforms
-
 from multiview.video.datasets import ViewPairDataset
+
 class MuiltivwDataset(BaseDataSet):
     """
-    Pascal Voc dataset
     http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar
     """
     def __init__(self, number_views, view_idx_labled, view_idx_adapt,**kwargs):
@@ -80,6 +79,7 @@ class MuiltivwDataset(BaseDataSet):
         cm=s["common name"]
         frame_idx =s["frame index"]
         image_adapt = s[self.view_key_img_adapt]
+        image_adapt = np.asarray(image_adapt, dtype=np.float32)
         # check for pseudo lebels
         dat_lable = cm + str(frame_idx)+'_pseudo_label.png'
         dat_lable = os.path.join(self.pseudo_dir,dat_lable)
@@ -87,7 +87,6 @@ class MuiltivwDataset(BaseDataSet):
             label_adapt = np.asarray(Image.open(dat_lable), dtype=np.int32)
         else:
             label_adapt=0
-        image_adapt = np.asarray(image_adapt, dtype=np.float32)
 
         # get superglue match for json
         # view_i= min(self.view_idx_labled,self.view_idx_adapt)
@@ -104,8 +103,8 @@ class MuiltivwDataset(BaseDataSet):
             # mkpts1,m_cnt1 = self._pad_match(data_match['mkpts1'])
             # assert m_cnt==m_cnt1
         # except:
-        mkpts0,mkpts1,m_cnt= 0,0,0
 
+        mkpts0,mkpts1,m_cnt= 0,0,0
         return image, label, image_adapt, label_adapt, cm, frame_idx
 
 class MVB(BaseDataLoader):

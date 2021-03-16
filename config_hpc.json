@@ -1,11 +1,11 @@
 {
-    "name": "Deeplab_train_base_data7_3to1_same_bot",
+    "name": "Deeplab_train_base_data7_4to1_mom_warmup5_same_bot",
     "n_gpu": 1,
     "use_synch_bn": true,     
 
     "arch": {
         "type": "DeepLab",
-        "student": false,
+        "student": true,
         "args": {
             "backbone": "resnet101",
             "freeze_bn": false,
@@ -18,7 +18,7 @@
         "args":{
             "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/train_adaptation",
             "view_idx_adapt": 1,
-            "view_idx_labled": 3,
+            "view_idx_labled": 4,
             "number_views": 5,
             "batch_size": 16,
             "base_size": 300,
@@ -37,9 +37,9 @@
     "pseudo_loader": {
         "type": "MVB",
         "args":{
-            "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/train_adaptation",
+            "data_dir": "/tmp/mv_data/texture_multibot_push_left10070/videos/train",
             "view_idx_adapt": 1,
-            "view_idx_labled": 3,
+            "view_idx_labled": 4,
             "number_views": 5,
             "batch_size": 16,
             "base_size": 300,
@@ -69,7 +69,6 @@
             "num_workers": 4
         }
     },
-
     "optimizer": {
         "type": "SGD",
         "differential_lr": true,
@@ -89,14 +88,14 @@
 
     "trainer": {
         "epochs": 80,
-        "save_dir": "saved_pseudo/",
+        "save_dir": "saved_pseudo_moment/",
         "save_period": 10,
   
         "monitor": "max Mean_IoU",
         "early_stop": 10,
         
         "tensorboard": true,
-        "log_dir": "saved_pseudo/runs",
+        "log_dir": "saved_pseudo_moment/runs",
         "log_per_iter": 20,
 
         "val": true,
